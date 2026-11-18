@@ -3,6 +3,7 @@
     windows_subsystem = "windows"
 )]
 
+mod avatar;
 mod desktop;
 mod preferences;
 mod reactor;
@@ -13,6 +14,7 @@ mod ui_shortcuts;
 
 use std::{cell::Cell, time::Duration};
 
+use avatar::Avatar;
 use desktop::{Cue, Desktop, DesktopAction};
 use preferences::{ActivityLog, Preferences, PreferencesStore};
 use rune::{
@@ -25,6 +27,7 @@ use ui_shortcuts::Shortcuts;
 const SIZE: (f32, f32) = (432.0, 620.0);
 const TITLEBAR_HEIGHT: f32 = 46.0;
 const FRAME_INTERVAL: f64 = 1.0 / 30.0;
+const CELEBRATION_SECONDS: f64 = 5.0;
 const FONTS: &[&[u8]] = &[
     include_bytes!("../static/fonts/Lato-Regular.ttf"),
     include_bytes!("../static/fonts/RobotoMono-Light.ttf"),
@@ -35,6 +38,7 @@ enum Page {
     Timer,
     Options,
     Themes,
+    Avatars,
     About,
 }
 
@@ -63,6 +67,7 @@ struct State {
     app: Option<AppHandle<Self>>,
     shortcuts: Shortcuts,
     drawer: Option<Page>,
+    drawer_opener: &'static str,
     last_page: Page,
     range_draft: Option<(ui::RangeSetting, u32)>,
     volume_popup: Option<f64>,
@@ -72,6 +77,7 @@ struct State {
     visual_time: f32,
     visual_clock: f64,
     impact: f32,
+    celebration_started: Option<f64>,
     system_reduced_motion: Cell<bool>,
     headless: bool,
 }
@@ -154,6 +160,7 @@ impl State {
             app,
             shortcuts: Shortcuts::default(),
             drawer: None,
+            drawer_opener: "settings",
             last_page: Page::Timer,
             range_draft: None,
             volume_popup: None,
@@ -163,6 +170,7 @@ impl State {
             visual_time: 0.0,
             visual_clock: 0.0,
             impact: 0.0,
+            celebration_started: None,
             system_reduced_motion: Cell::new(false),
             headless,
         }
@@ -170,6 +178,31 @@ impl State {
 
     fn theme(&self) -> &Theme {
         selected_theme(&self.themes, self.prefs.theme.as_deref())
+    }
+
+    fn choose_avatar(&mut self, avatar: Avatar, tx: &mut Tx) {
+        if self.prefs.avatar != avatar {
+            self.prefs.avatar = avatar;
+            self.interface_click();
+            self.save_preferences();
+            tx.announce(format!("{} selected", avatar.name()), LiveRegion::Polite);
+        }
+    }
+
+    fn open_avatar_gallery(&mut self, tx: &mut Tx) {
+        self.drawer_opener = ui::CHOOSE_AVATAR_KEY;
+        self.select_page(Some(Page::Avatars), tx);
+        tx.focus_when_shown(ui::avatar_key(self.prefs.avatar), tx.focus_visible());
+    }
+
+    fn celebration_progress(&self) -> Option<f32> {
+        self.celebration_started.map(|start| {
+            if self.motion_enabled() {
+                ((self.last_clock - start) / CELEBRATION_SECONDS).clamp(0.0, 1.0) as f32
+            } else {
+                0.45
+            }
+        })
     }
 
     fn select_page(&mut self, page: Option<Page>, tx: &mut Tx) {
@@ -184,7 +217,10 @@ impl State {
             self.last_page = page;
             tx.focus_when_shown(ui::tab_key(page), tx.focus_visible());
         } else {
-            tx.focus_when_shown("settings", tx.focus_visible());
+            tx.focus_when_shown(
+                std::mem::replace(&mut self.drawer_opener, "settings"),
+                tx.focus_visible(),
+            );
             self.visual_clock = tx.clock();
             self.schedule(tx);
         }
@@ -260,15 +296,22 @@ impl State {
                 }
             }
             TimerEvent::Completed { next, .. } => {
+                let celebrate = event.celebrates_focus();
+                self.celebration_started = celebrate.then_some(tx.clock());
                 self.desktop.publish("idle");
                 self.desktop.round_changed(
                     next.as_str(),
                     self.prefs.volume,
                     self.prefs.notifications,
+                    celebrate,
                 );
                 self.configure_desktop();
                 tx.announce(
-                    format!("{} ready", ui::phase_name(next)),
+                    if celebrate {
+                        format!("Focus complete! {} ready", ui::phase_name(next))
+                    } else {
+                        format!("{} ready", ui::phase_name(next))
+                    },
                     LiveRegion::Polite,
                 );
             }
@@ -277,6 +320,9 @@ impl State {
     }
 
     fn schedule(&self, tx: &mut Tx) {
+        if let Some(start) = self.celebration_started {
+            tx.wake_at(start + CELEBRATION_SECONDS);
+        }
         if let Some(wake) = self.timer.next_wake() {
             tx.wake_after(wake);
         }
@@ -296,7 +342,12 @@ impl State {
     }
 
     fn boop(&mut self, tx: &mut Tx) {
-        self.desktop.cue(Cue::Boop, self.prefs.volume);
+        let cue = match self.prefs.avatar {
+            Avatar::Tomato => Cue::Boop,
+            Avatar::Luma => Cue::Flutter,
+            Avatar::Clack => Cue::Claws,
+        };
+        self.desktop.cue(cue, self.prefs.volume);
         self.visual_clock = tx.clock();
         self.impact = 2.0;
         self.schedule(tx);
@@ -309,7 +360,9 @@ impl State {
     fn animate_reactor(&self) -> bool {
         self.motion_enabled()
             && self.drawer.is_none()
-            && (self.timer.status() != Status::Paused || self.impact > 0.0)
+            && (self.timer.status() != Status::Paused
+                || self.impact > 0.0
+                || self.celebration_started.is_some())
             && (self.headless
                 || (self.app.as_ref().is_some_and(AppHandle::is_visible)
                     && !self.window_minimized()))
@@ -434,6 +487,13 @@ impl State {
 fn poll(state: &mut State, clock: f64, tx: &mut Tx) -> bool {
     state.hide_minimized_window();
     let mut changed = state.advance_to(clock, tx);
+    if state
+        .celebration_started
+        .is_some_and(|start| clock >= start + CELEBRATION_SECONDS)
+    {
+        state.celebration_started = None;
+        changed = true;
+    }
     changed |= state.advance_reactor(clock);
     if state.volume_popup.is_some_and(|due| due <= clock) && state.range_draft.is_none() {
         state.volume_popup = None;
@@ -508,12 +568,20 @@ fn spec() -> AppSpec<State> {
         fonts: FONTS,
         families: ("Lato", "Roboto Mono"),
         poll: Some(poll),
+        setup: Some(|_, wake| reactor::setup_images(wake)),
         on_key: Some(on_key),
         scenes: &[
             ("timer", |_| {}),
             ("timer-settings", |state| state.drawer = Some(Page::Timer)),
             ("options", |state| state.drawer = Some(Page::Options)),
             ("themes", |state| state.drawer = Some(Page::Themes)),
+            ("avatars", |state| state.drawer = Some(Page::Avatars)),
+            ("focus-finish", |state| {
+                state.timer.toggle();
+                state.timer.advance(Duration::from_secs(
+                    u64::from(state.timer.total_seconds()) - 2,
+                ));
+            }),
             ("about", |state| state.drawer = Some(Page::About)),
             ("short-break", |state| {
                 state.timer.skip();

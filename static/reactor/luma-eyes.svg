@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="34" height="16" viewBox="-17 -25 34 16">
+  <defs>
+    <radialGradient id="iris" cx=".6" cy=".2" r=".95">
+      <stop stop-color="#52484e"/><stop offset=".45" stop-color="#363d50"/><stop offset=".74" stop-color="#a17f63"/><stop offset=".9" stop-color="#f2d68c"/><stop offset="1" stop-color="#9f8468"/>
+    </radialGradient>
+    <g id="eye">
+      <ellipse cx="-9.1" cy="-17.4" rx="5.2" ry="6.6" fill="#1f2639" transform="rotate(9 -9.1 -17.4)"/>
+      <ellipse cx="-9" cy="-17.2" rx="4.55" ry="5.95" fill="url(#iris)" stroke="#adaca1" stroke-width=".65"/>
+      <ellipse cx="-8.7" cy="-17.45" rx="2.55" ry="4.15" fill="#182034"/>
+      <path d="M-12-14.8Q-11.4-12.2-9-12" fill="none" stroke="#ffe6a0" stroke-width="1.15" stroke-linecap="round"/>
+    </g>
+  </defs>
+  <use xlink:href="#eye"/><use xlink:href="#eye" transform="scale(-1 1)"/>
+  <g fill="#fffbe1">
+    <ellipse cx="-10.2" cy="-19.45" rx="1.55" ry="1.8"/><ellipse cx="7.95" cy="-19.45" rx="1.55" ry="1.8"/>
+    <circle cx="-7.5" cy="-15.95" r=".63"/><circle cx="10.75" cy="-15.95" r=".63"/>
+  </g>
+</svg>

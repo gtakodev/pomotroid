@@ -97,8 +97,20 @@ function Find-UiElement([string]$Name) {
 
 function Invoke-Button([string]$Name) {
     $element = Wait-For "the '$Name' button" { Find-UiElement $Name }
-    $invoke = $element.GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern)
-    $invoke.Invoke()
+    $pattern = $null
+    if ($element.TryGetCurrentPattern([Windows.Automation.InvokePattern]::Pattern, [ref]$pattern)) {
+        $pattern.Invoke()
+    } elseif ($element.TryGetCurrentPattern([Windows.Automation.TogglePattern]::Pattern, [ref]$pattern)) {
+        $pattern.Toggle()
+    } elseif ($element.TryGetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern, [ref]$pattern)) {
+        if ($pattern.Current.ExpandCollapseState -eq [Windows.Automation.ExpandCollapseState]::Expanded) {
+            $pattern.Collapse()
+        } else {
+            $pattern.Expand()
+        }
+    } else {
+        throw "'$Name' has no supported activation pattern. UIA role: $($element.Current.ControlType.ProgrammaticName)"
+    }
 }
 
 function Assert-AppHidden {
@@ -165,7 +177,7 @@ $errors = $null
 try {
     [void][IO.Directory]::CreateDirectory($profilePath)
     @{
-        timeWork = 2
+        timeWork = 1
         timeShortBreak = 1
         autoStartWorkTimer = $false
         autoStartBreakTimer = $false
@@ -204,8 +216,12 @@ try {
     }
 
     Read-TimerEvent 'getState' 'idle'
-    [void](Wait-For 'the two-minute focus timer' { Find-UiElement '2:00' })
+    [void](Wait-For 'the one-minute focus timer' { Find-UiElement '1:00' })
     Invoke-Button 'Boop the tomato'
+    Invoke-Button 'Change avatar'
+    Invoke-Button 'Clack'
+    Invoke-Button 'Back to timer'
+    Invoke-Button 'Boop Clack'
     [void](Wait-For 'the start control after a boop' { Find-UiElement 'Start timer' })
     Invoke-Button 'Start timer'
     Read-TimerEvent 'roundChange' 'work'
@@ -237,8 +253,22 @@ try {
     if ($breakElapsed.Elapsed.TotalSeconds -lt 59) { throw 'The one-minute break completed early.' }
     $window = Restore-FromTray
     [void](Wait-For 'the focus timer after the hidden break completed' { Find-UiElement 'FOCUS' })
-    [void](Wait-For 'the full two-minute focus round' { Find-UiElement '2:00' })
+    [void](Wait-For 'the full one-minute focus round' { Find-UiElement '1:00' })
     Write-Host 'Passed close to tray, natural timer completion while hidden, and restore.'
+
+    $socket.Dispose()
+    $socket = $null
+    $app.Kill()
+    if (-not $app.WaitForExit(5000)) { throw 'The test process did not exit before relaunch.' }
+    $app.Dispose()
+    $app = [Diagnostics.Process]::Start($launch)
+    $errors = $app.StandardError.ReadToEndAsync()
+    $window = Wait-For 'the relaunched window' { Get-VisibleAppWindow } 20
+    Invoke-Button 'Boop Clack'
+    Invoke-Button 'Start timer'
+    [void](Wait-For 'the focus celebration on natural expiry' { Find-UiElement 'Focus complete!' } 75)
+    [void](Wait-For 'the playable short break during the celebration' { Find-UiElement 'Start timer' })
+    Write-Host 'Passed avatar selection across restart and the natural focus celebration.'
 } finally {
     if ($null -ne $socket) { $socket.Dispose() }
     if ($null -ne $app) {

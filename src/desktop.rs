@@ -97,19 +97,27 @@ impl Desktop {
         }
     }
 
-    pub fn round_changed(&self, phase: &str, volume: u32, notify: bool) {
+    pub fn round_changed(&self, phase: &str, volume: u32, notify: bool, celebrate: bool) {
         if self.headless {
             return;
         }
         let (sound, title, body) = match phase {
             "short-break" => (
                 audio::Sound::ShortBreak,
-                "Focus round complete",
+                if celebrate {
+                    "Focus round complete"
+                } else {
+                    "Short break ready"
+                },
                 format!("Take a {} minute short break.", self.durations[1]),
             ),
             "long-break" => (
                 audio::Sound::LongBreak,
-                "Focus round complete",
+                if celebrate {
+                    "Focus round complete"
+                } else {
+                    "Long break ready"
+                },
                 format!("Take a {} minute long break.", self.durations[2]),
             ),
             _ => (
@@ -119,7 +127,11 @@ impl Desktop {
             ),
         };
         if let Some(audio) = &self.audio {
-            audio.play(sound, volume);
+            if celebrate && self.interface_sounds {
+                audio.cue(Cue::Fanfare, volume);
+            } else {
+                audio.play(sound, volume);
+            }
         }
         if notify {
             notify_round(title, body);

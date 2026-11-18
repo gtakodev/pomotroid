@@ -65,13 +65,36 @@ impl TimerConfig {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Finish {
+    Elapsed,
+    Skipped,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TimerEvent {
     Started(Phase),
     Resumed(Phase),
     Paused(Phase),
     Reset(Phase),
     Tick(Phase),
-    Completed { phase: Phase, next: Phase },
+    Completed {
+        phase: Phase,
+        next: Phase,
+        cause: Finish,
+    },
+}
+
+impl TimerEvent {
+    pub fn celebrates_focus(self) -> bool {
+        matches!(
+            self,
+            Self::Completed {
+                phase: Phase::Work,
+                cause: Finish::Elapsed,
+                ..
+            }
+        )
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -173,7 +196,7 @@ impl Timer {
     }
 
     pub fn skip(&mut self) -> Option<TimerEvent> {
-        Some(self.complete())
+        Some(self.complete(Finish::Skipped))
     }
 
     pub fn configure(&mut self, config: TimerConfig) -> Option<TimerEvent> {
@@ -198,7 +221,9 @@ impl Timer {
                 };
                 None
             }
-            Clock::Running { remaining } if elapsed >= remaining => Some(self.complete()),
+            Clock::Running { remaining } if elapsed >= remaining => {
+                Some(self.complete(Finish::Elapsed))
+            }
             Clock::Running { remaining } => {
                 let next = remaining - elapsed;
                 self.clock = Clock::Running { remaining: next };
@@ -208,7 +233,7 @@ impl Timer {
         }
     }
 
-    fn complete(&mut self) -> TimerEvent {
+    fn complete(&mut self, cause: Finish) -> TimerEvent {
         let phase = self.phase;
         self.phase = match phase {
             Phase::Work => {
@@ -242,6 +267,7 @@ impl Timer {
         TimerEvent::Completed {
             phase,
             next: self.phase,
+            cause,
         }
     }
 }

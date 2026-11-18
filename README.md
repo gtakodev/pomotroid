@@ -4,7 +4,7 @@ Pomotroid is a desktop Pomodoro timer written in Rust. The native interface uses
 
 ![The Tomato Reactor, with a floating red tomato above the focus timer](.github/images/pomotroid-rune.png)
 
-[Watch the tomato bounce and switch to break lighting](.github/images/tomato-reactor.webp).
+[Watch the avatar gallery and a focus celebration](.github/images/tomato-reactor.webp).
 
 ## Run the timer
 
@@ -14,7 +14,11 @@ Install Rust with rustup. On Windows, install the Visual Studio C++ build tools 
 cargo run --locked --release
 ```
 
-Press **Space** to start or pause. **Reset** restarts the current round. **Skip** advances to the next phase and credits the current focus round. Click the tomato to make it bounce. The chamber lights change with each phase, and the clock stays in place.
+Press **Space** to start or pause. **Reset** restarts the current round. **Skip** advances to the next phase and credits the current focus round.
+
+Select **Change avatar** in the chamber to pick Tomato, Luma the lunar moth, or Clack the radio crab. Your choice carries across restarts, and you can switch in the middle of a session. Click a character to see its reaction.
+
+When a focus round reaches zero, your character celebrates for five seconds with confetti and a short fanfare. Your break starts according to its usual setting. Reduced motion shows a still celebration, and turning off interface sounds restores the original round alert.
 
 Open the gear to change durations, rounds, automatic starts, themes and global shortcuts. Under **Options**, switch **Animation** and **Interface sounds** on or off independently. The reactor also follows the system’s reduced-motion setting. Use the speaker control to mute or adjust the volume.
 

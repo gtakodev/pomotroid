@@ -13,12 +13,12 @@ def accessible_nodes(node):
         yield from accessible_nodes(child)
 
 
-def check(binary, directory, name, actions, at, expected):
+def check(binary, directory, name, actions, at, expected, scene="timer"):
     script = directory / f"{name}-input.json"
     tree = directory / f"{name}-tree.json"
     script.write_text(json.dumps(actions), encoding="utf-8")
     subprocess.run(
-        [binary, "--script", script, "--at", str(at), "--tree", tree],
+        [binary, "--scene", scene, "--script", script, "--at", str(at), "--tree", tree],
         check=True,
         timeout=60,
     )
@@ -26,7 +26,9 @@ def check(binary, directory, name, actions, at, expected):
     controls = {element.get("key"): element for element in snapshot["elements"]}
     accessible = {node.get("key"): node for node in accessible_nodes(snapshot["accessibility"])}
     for key, field, value in expected:
-        if field == "checked":
+        if field == "present":
+            actual = key in controls
+        elif field == "checked":
             actual = "checked" in accessible[key]["states"]
         else:
             actual = controls[key].get(field)
@@ -36,25 +38,38 @@ def check(binary, directory, name, actions, at, expected):
 
 
 def check_motion(binary, directory):
-    script = directory / "reduce-motion.json"
-    script.write_text(json.dumps([
-        {"t": 0.1, "key": "settings"},
-        {"t": 0.25, "key": "tab-options"},
-        {"t": 0.4, "key": "visual-motion"},
-        {"t": 0.6, "key": "settings"},
-    ]), encoding="utf-8")
-    for motion in (True, False):
-        snapshots = []
-        for at in ("1", "2"):
-            png = directory / f"motion-{motion}-{at}.png"
-            args = [binary, "--at", at, "--scale", "1", "--crop", "reactor", "--snap", png]
+    script = directory / "avatar-motion.json"
+    png = directory / "chamber.png"
+    portraits = set()
+    for pilot in ("tomato", "luma", "clack"):
+        choose = [
+            {"t": 0.1, "key": "choose-avatar"}, {"t": 0.25, "key": f"avatar-{pilot}"},
+            {"t": 0.4, "type": "key", "name": "Escape"},
+        ]
+        for motion in (True, False):
+            actions = choose.copy()
             if not motion:
-                args += ["--script", script]
-            subprocess.run(args, check=True, timeout=60, capture_output=True)
-            snapshots.append(png.read_bytes())
-        if (snapshots[0] != snapshots[1]) != motion:
-            raise AssertionError(f"Reactor movement disagrees with Animation={motion}")
-    print("Passed animated and still reactor captures")
+                actions += [
+                    {"t": 0.55, "key": "settings"}, {"t": 0.7, "key": "tab-options"},
+                    {"t": 0.85, "key": "visual-motion"}, {"t": 1, "key": "settings"},
+                ]
+            script.write_text(json.dumps(actions), encoding="utf-8")
+            # Both captures fall in the same break, after its automatic start.
+            for scene in ("timer", "focus-finish"):
+                snapshots = []
+                for at in ("4.25", "4.75"):
+                    subprocess.run([
+                        binary, "--scene", scene, "--script", script, "--at", at,
+                        "--scale", "1", "--crop", "reactor", "--snap", png,
+                    ], check=True, timeout=60, capture_output=True)
+                    snapshots.append(png.read_bytes())
+                if (snapshots[0] != snapshots[1]) != motion:
+                    raise AssertionError(f"{pilot} movement in {scene} disagrees with Animation={motion}")
+                if not motion and scene == "focus-finish":
+                    portraits.add(snapshots[0])
+    if len(portraits) != 3:
+        raise AssertionError("Two pilots rendered the same celebration")
+    print("Passed moving and reduced-motion idle poses and celebrations for all three pilots")
 
 
 def main():
@@ -85,7 +100,17 @@ def main():
         check(binary, directory, "Skip focus and auto-start the break", [
             {"t": 0.1, "key": "skip"},
         ], 3.0, [("phase", "text", "SHORT BREAK"), ("time-left", "text", "4:59"),
-                 ("start-pause", "label", "Pause timer")])
+                 ("start-pause", "label", "Pause timer"), ("focus-complete", "present", False)])
+        gallery = [{"t": 0.1, "key": "choose-avatar"}, {"t": 0.3, "key": "avatar-luma"}]
+        check(binary, directory, "Choose a pilot", gallery, 0.6, [
+            ("avatar-luma", "checked", True), ("avatar-tomato", "checked", False)])
+        use_luma = gallery + [{"t": 0.55, "type": "key", "name": "Escape"}]
+        check(binary, directory, "Earn a celebration with the selected pilot", use_luma, 3, [
+            ("boop", "label", "Boop Luma"), ("focus-complete", "text", "Focus complete!"),
+            ("phase", "text", "SHORT BREAK")], "focus-finish")
+        check(binary, directory, "Keep the break playable after the celebration", use_luma, 8, [
+            ("focus-complete", "present", False), ("start-pause", "label", "Pause timer"),
+            ("phase", "text", "SHORT BREAK")], "focus-finish")
         check_motion(binary, directory)
 
 

@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="60" height="99" viewBox="-30 -41 60 99">
+  <defs>
+    <linearGradient id="belly" x1="0" y1=".25" x2="1" y2=".64">
+      <stop stop-color="#2a3044"/><stop offset=".26" stop-color="#48516a"/><stop offset=".47" stop-color="#76879a"/>
+      <stop offset=".72" stop-color="#475972"/><stop offset="1" stop-color="#202537"/>
+    </linearGradient>
+    <radialGradient id="ruff" cx=".36" cy=".15" r=".9">
+      <stop stop-color="#f8ecd0"/><stop offset=".23" stop-color="#dcebe2"/><stop offset=".48" stop-color="#adc9cf"/>
+      <stop offset=".75" stop-color="#738fa3"/><stop offset="1" stop-color="#3f4b65"/>
+    </radialGradient>
+    <radialGradient id="face" cx=".39" cy=".17" r=".94">
+      <stop stop-color="#718093"/><stop offset=".29" stop-color="#526278"/><stop offset=".67" stop-color="#31394d"/><stop offset="1" stop-color="#202233"/>
+    </radialGradient>
+    <linearGradient id="metal" x1="0" y1="0" x2=".65" y2="1">
+      <stop stop-color="#fff2b7"/><stop offset=".55" stop-color="#d7b37f"/><stop offset="1" stop-color="#997f74"/>
+    </linearGradient>
+    <g id="feet" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M8 12Q17 14 21 8L25 4M10 17Q16 21 20 19L24 17M9 23Q14 31 19 30L23 27" stroke="#394154" stroke-width="3.3"/>
+      <path d="M13 14Q18 13 21 9L24 5M14 20Q19 21 22 18M12 27Q17 33 21 28" stroke="#b5aba0" stroke-width="1.05"/>
+      <path d="M24 5l1.6-1.8M22 18l1.9-1.3M21 28l1.8-1.6" stroke="#f2d8ac" stroke-width="1.1"/>
+    </g>
+  </defs>
+  <use xlink:href="#feet" transform="scale(-1 1)"/><use xlink:href="#feet"/>
+  <path d="M-11 6C-12 18-12 29-8 40Q-5 49 0 55Q6 46 9 38Q14 20 11 7Z" fill="url(#belly)" stroke="#383e54" stroke-width="1.2"/>
+  <g fill="none" stroke-linecap="round">
+    <path d="M-10 18Q-1 23 10 18M-9 26Q0 31 9 26M-7.5 33Q0 38 7.5 33M-5.5 40Q0 44 5.5 40M-3 46Q0 48 3 46" stroke="#253245" stroke-width="1.8"/>
+    <path d="M-8 19Q-2 22 4 20.8M-7 27Q-1 29.7 4 28.7M-5.4 34Q-1 36.5 3.5 35.4M-3.4 41Q0 42.6 3 41.3" stroke="#bfad93" stroke-width=".9"/>
+  </g>
+  <path d="M-12-8Q-18-4-21 4L-16 2L-18 9L-13 6L-12 14L-8 12L-6 18L-2 15L1 21L5 15L8 16L10 11L14 13L15 6L20 8L17 2L21 3Q18-6 12-9Z" fill="url(#ruff)" stroke="#7b8e99" stroke-width=".8" stroke-linejoin="round"/>
+  <g fill="none" stroke-linecap="round">
+    <path d="M-13-2Q-16 2-15.5 5M-10 .3Q-12 4-11 8M-7 1Q-10 9-8 12M-4 3Q-5 8-4 13M0 3Q-2 11 1 15M4 4Q3 8 4.5 11M8 2Q7 7 8 10M12 .5Q14 4 14 7" stroke="#e4ece0" stroke-width=".87" opacity=".84"/>
+    <path d="M-13 2Q-15 5-15 7M-8 4Q-10 9-9 12M-2 7Q-3 12-2 15M5 5Q5 10 6 12M10 3Q10 8 11 9" stroke="#788fa2" stroke-width=".65"/>
+  </g>
+  <path d="M-21-18Q-21-28-12-32L-14-36Q-9-35-6-32Q-5-37-1-39L1-34Q4-37 7-37L7-33Q12-36 16-35L14-31Q21-28 21-19L23-15L20-15L22-11L18-11Q16-5 7-4Q0-1-8-4Q-16-5-19-10L-22-11L-20-15L-23-15Z" fill="url(#face)" stroke="#728496" stroke-width="1.05" stroke-linejoin="round"/>
+  <path d="M-14-29Q-10-33-6-30M-4-31L-.5-35M3-32L5-34M9-31Q12-33 14-32" fill="none" stroke="#99a8ad" stroke-width=".85" stroke-linecap="round"/>
+  <path d="M-18-21Q-12-27-5-23M4-23Q11-27 17-22" fill="none" stroke="#293244" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M-16-23Q-12-26-7-24M7-24Q12-26 16-23" fill="none" stroke="#a3b0b7" stroke-width=".83" stroke-linecap="round"/>
+  <path d="M-3.4-28.6Q-.5-26 3.5-29.7Q3.3-24.1.4-23.7Q-2.5-23.6-3.4-28.6Z" fill="url(#metal)"/>
+  <path d="M-3.6-10.4Q0-7.7 3.6-10.4" fill="none" stroke="#d8c9ae" stroke-width="1.1" stroke-linecap="round"/>
+  <g fill="#d8a8a2" opacity=".85">
+    <ellipse cx="-15" cy="-12.2" rx="2.05" ry=".82" transform="rotate(13 -15 -12.2)"/>
+    <ellipse cx="15" cy="-12.2" rx="2.05" ry=".82" transform="rotate(-13 15 -12.2)"/>
+  </g>
+  <path d="M-4 4Q0 6 4 4L3 9L0 12L-3 9Z" fill="#41566b" stroke="#b8ab8c" stroke-width=".75"/>
+  <path d="M0 5.7L2.1 8L0 10.6L-2.1 8Z" fill="#f6dfa1"/>
+</svg>

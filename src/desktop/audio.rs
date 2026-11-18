@@ -34,6 +34,9 @@ pub enum Cue {
     Reset,
     Click,
     Boop,
+    Flutter,
+    Claws,
+    Fanfare,
 }
 
 impl Cue {
@@ -58,6 +61,21 @@ impl Cue {
             Self::Boop => &[
                 Note::new(0, 152, (690.0, 335.0), 0.155, Spring),
                 Note::new(93, 112, (396.0, 511.0), 0.08, Spring),
+            ],
+            Self::Flutter => &[
+                Note::new(0, 86, (740.0, 1046.5), 0.095, Spring),
+                Note::new(72, 150, (987.8, 1318.5), 0.085, Spring),
+            ],
+            Self::Claws => &[
+                Note::new(0, 60, (520.0, 120.0), 0.10, Mechanism),
+                Note::new(96, 72, (595.0, 156.0), 0.11, Mechanism),
+            ],
+            Self::Fanfare => &[
+                Note::new(0, 140, (523.3, 523.3), 0.12, Spring),
+                Note::new(115, 155, (659.3, 659.3), 0.12, Spring),
+                Note::new(235, 190, (784.0, 784.0), 0.12, Spring),
+                Note::new(405, 380, (1046.5, 1046.5), 0.11, Spring),
+                Note::new(405, 375, (659.3, 659.3), 0.065, Motor),
             ],
         };
         let length = notes
@@ -232,6 +250,9 @@ mod tests {
             (Cue::Reset, 142),
             (Cue::Click, 53),
             (Cue::Boop, 205),
+            (Cue::Flutter, 222),
+            (Cue::Claws, 168),
+            (Cue::Fanfare, 785),
         ] {
             let samples = cue.samples();
             assert_eq!(samples, cue.samples());

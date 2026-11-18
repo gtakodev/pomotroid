@@ -17,7 +17,7 @@ The specification represents a cycle as numbered positions. Even positions are f
 For each input, the checker compares the phase, round number, completion credit, status, displayed seconds, exact remaining duration, pending start delay, next wake, and emitted event. The checks cover these behaviors.
 
 - An uninterrupted round emits one completion at its deadline. A late callback completes at most one round.
-- A manual skip takes the same cycle transition as expiry. Either credits one focus round when leaving work. Leaving a break adds no credit.
+- A manual skip takes the same cycle transition as expiry. Either credits one focus round when leaving work. The checker also compares the app’s celebration trigger against the elapsed time in the independent model. Only reaching the deadline of a running focus round earns a celebration. Leaving a break adds no credit.
 - The current round stays between one and the configured target. Lowering the target caps the current round immediately. A short break normally advances one round. If a target edit makes that break the last round, it leads directly to round one. A long break always leads to round one, including after a target increase. Editing the target preserves the current break type and clock.
 - Pausing freezes the remaining duration. Resuming preserves it. Reset restores the full duration of the same phase and cancels a scheduled start.
 - Each transition samples the auto-start preference for its destination. A pending start waits 1.5 seconds. Starting manually consumes that pending start.
@@ -46,3 +46,5 @@ The formal result applies to the stated finite model. Other clock values and set
 A negative control changed the long-break decision in a temporary copy of the production timer from `round >= configured_rounds` to `round > configured_rounds`. The checker rejected the mutated timer after one input, `Skip`. With a target of one, the specification selected a long break and the mutated code selected a short break.
 
 A second negative control allowed a short break to advance the round when the round already equaled the target. The checker rejected it after four inputs. Set the target to two, skip into a short break, lower the target to one, and skip the break. The mutated timer started work at round two of one.
+
+A third negative control let a skipped focus round trigger a celebration. The checker rejected the single input `Skip` from the initial state. The phase, remaining time and earned credit all matched the specification, but the celebration flag differed.

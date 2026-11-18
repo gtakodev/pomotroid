@@ -23,7 +23,7 @@ mod production {
     }
 }
 
-use production::{Phase, Status, Timer, TimerConfig, TimerEvent};
+use production::{Finish, Phase, Status, Timer, TimerConfig, TimerEvent};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 struct Settings {
@@ -207,7 +207,12 @@ impl Spec {
                 } else {
                     Motion::Stopped
                 };
-                Some(TimerEvent::Completed { phase, next })
+                let cause = if matches!(input, Input::Skip) {
+                    Finish::Skipped
+                } else {
+                    Finish::Elapsed
+                };
+                Some(TimerEvent::Completed { phase, next, cause })
             }
         };
         (event, earned)
@@ -281,12 +286,17 @@ fn all_reachable_timer_states_refine_the_cycle_specification() {
             let mut expected = spec.clone();
             let event = apply(&mut next, input);
             let (expected_event, earned) = expected.step(input);
+            let reached_focus_deadline = spec.phase() == Phase::Work
+                && spec.motion == Motion::Moving
+                && matches!(input, Input::Elapse(t) if spec.age + t >= spec.length());
+            let celebrated = event.is_some_and(TimerEvent::celebrates_focus);
             if event != expected_event
+                || celebrated != reached_focus_deadline
                 || next.completed_work() != earned
                 || !expected.observe(&next)
             {
                 panic!(
-                    "Inputs {:?}\nexpected {expected:?}, {expected_event:?}, credit {earned}\ngot {next:?}, {event:?}",
+                    "Inputs {:?}\nexpected {expected:?}, {expected_event:?}, credit {earned}, celebrate={reached_focus_deadline}\ngot {next:?}, {event:?}, celebrate={celebrated}",
                     counterexample(&parents, id, input)
                 );
             }
@@ -324,7 +334,11 @@ fn successive_scheduled_wakes_finish_each_phase_on_its_deadline() {
             let delay = timer.next_wake().unwrap();
             assert_eq!(delay, Duration::from_secs(1));
             let expected = if remaining == 1 {
-                TimerEvent::Completed { phase, next }
+                TimerEvent::Completed {
+                    phase,
+                    next,
+                    cause: Finish::Elapsed,
+                }
             } else {
                 TimerEvent::Tick(phase)
             };
@@ -370,7 +384,8 @@ fn every_supported_target_gets_its_full_cycle() {
                     timer.advance(Duration::from_secs(1)),
                     Some(TimerEvent::Completed {
                         phase: Phase::Work,
-                        next
+                        next,
+                        cause: Finish::Elapsed,
                     })
                 );
                 assert_eq!(
@@ -385,7 +400,8 @@ fn every_supported_target_gets_its_full_cycle() {
                     timer.skip(),
                     Some(TimerEvent::Completed {
                         phase: next,
-                        next: Phase::Work
+                        next: Phase::Work,
+                        cause: Finish::Skipped,
                     })
                 );
             }
@@ -418,6 +434,7 @@ fn editing_rounds_preserves_the_clock_and_finishes_the_selected_break() {
         Some(TimerEvent::Completed {
             phase: Phase::ShortBreak,
             next: Phase::Work,
+            cause: Finish::Elapsed,
         })
     );
     assert_eq!((timer.round(), timer.completed_work()), (1, 4));
@@ -478,7 +495,8 @@ fn commands_replace_delayed_starts_and_preserve_fractional_seconds() {
         timer.advance(Duration::MAX),
         Some(TimerEvent::Completed {
             phase: Phase::LongBreak,
-            next: Phase::Work
+            next: Phase::Work,
+            cause: Finish::Elapsed,
         })
     );
     timer.reset();

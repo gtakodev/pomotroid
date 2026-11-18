@@ -1,4 +1,9 @@
-use std::cell::RefCell;
+mod clack;
+mod luma;
+pub(crate) use luma::setup_images;
+
+use crate::avatar::Avatar;
+use std::cell::{OnceCell, RefCell};
 use std::f32::consts::{PI, TAU};
 use std::sync::LazyLock;
 
@@ -94,6 +99,11 @@ struct Chamber {
     accent: Color,
     backdrop: Pixels,
     near_ring: Pixels,
+    lamp: Rgb,
+    tomato: OnceCell<TomatoPaint>,
+}
+
+struct TomatoPaint {
     fruit: Pixels,
     gloss: Pixels,
     reflection: Pixels,
@@ -114,15 +124,12 @@ impl Chamber {
         let tint = [accent.r, accent.g, accent.b].map(|c| rune::color::srgb_encode(c) * 255.0);
         let lamp = mix(dye, tint, 0.28);
         let (backdrop, near_ring) = chamber_surfaces(lamp);
-        let (fruit, gloss, reflection, lids) = fruit_surfaces(phase, lamp);
         Self {
             accent,
             backdrop,
             near_ring,
-            fruit,
-            gloss,
-            reflection,
-            lids,
+            lamp,
+            tomato: OnceCell::new(),
         }
     }
 }
@@ -235,7 +242,7 @@ fn closed_eye(shell: &RgbaImage, cx: u32) -> Pixels {
     texture(LID_W, LID_H, patch)
 }
 
-fn fruit_surfaces(phase: Phase, lamp: Rgb) -> (Pixels, Pixels, Pixels, [Pixels; 2]) {
+fn fruit_surfaces(phase: Phase, lamp: Rgb) -> TomatoPaint {
     let (w, h) = TOMATO.dimensions();
     let mut shell = (*TOMATO).clone();
     let mut gloss = Vec::with_capacity((w * h * 4) as usize);
@@ -269,12 +276,12 @@ fn fruit_surfaces(phase: Phase, lamp: Rgb) -> (Pixels, Pixels, Pixels, [Pixels; 
         }
     }
     let lids = EYE_X.map(|x| closed_eye(&shell, x));
-    (
-        texture(w, h, shell.into_raw()),
-        texture(w, h, gloss),
-        texture(w, reflection_h, reflection),
+    TomatoPaint {
+        fruit: texture(w, h, shell.into_raw()),
+        gloss: texture(w, h, gloss),
+        reflection: texture(w, reflection_h, reflection),
         lids,
-    )
+    }
 }
 
 fn plate(surface: &Pixels, x: f32, y: f32, w: f32, h: f32) -> El {
@@ -380,7 +387,123 @@ fn sight_marks(accent: Color, pulse: f32) -> El {
     canvas(sight).absolute(0.0, 0.0).size(W as f32, H as f32)
 }
 
-pub fn view(phase: Phase, status: Status, time: f32, pulse: f32, accent: Color) -> El {
+pub fn portrait(avatar: Avatar) -> El {
+    match avatar {
+        Avatar::Tomato => {
+            thread_local! {
+                static PORTRAIT: Pixels = texture(TOMATO.width(), TOMATO.height(), TOMATO.as_raw().clone());
+            }
+            PORTRAIT.with(|pixels| {
+                el().size(64.0, 48.0)
+                    .child(plate(pixels, 8.0, 0.0, 48.0, 48.0))
+            })
+        }
+        Avatar::Clack => clack::portrait(),
+        Avatar::Luma => luma::portrait(),
+    }
+}
+
+fn tomato(paint: &TomatoPaint, status: Status, time: f32, pulse: f32, celebration: f32) -> El {
+    let tap_age = (2.0 - pulse).clamp(0.0, 1.0);
+    let spring = (tap_age * TAU * 1.7).sin() * (1.0 - tap_age).powi(2);
+    let bounce = (tap_age * PI).sin() * (1.0 - tap_age);
+    let hop = (celebration.max(0.0) * 4.0 * PI).sin().abs() * (1.0 - celebration.max(0.0));
+    let fruit_w = SPRITE * (1.0 + 0.13 * spring - 0.07 * hop);
+    let fruit_h = SPRITE * (1.0 - 0.15 * spring + 0.05 * hop);
+    let fruit_x = CENTER - fruit_w * 0.5
+        + 1.8 * (time * 0.65).sin()
+        + 8.0 * (TAU * celebration.max(0.0) * 2.0).sin();
+    let fruit_y = 11.0 + (SPRITE - fruit_h) * 0.78 + 3.7 * (time * 1.1).sin()
+        - 2.8 * pulse.min(1.0)
+        - 19.0 * bounce
+        - 16.0 * hop;
+    let scan = fruit_w * (0.50 + 0.44 * (time * 0.61 - 0.8).sin());
+    let lamp_strength = if status == Status::Paused { 0.23 } else { 0.68 };
+    let gloss = el()
+        .absolute(fruit_x + scan - 13.0, fruit_y)
+        .size(26.0, fruit_h)
+        .clip_fade(12.5, 0.0, 12.5, 0.0)
+        .child(plate(&paint.gloss, 13.0 - scan, 0.0, fruit_w, fruit_h))
+        .opacity(lamp_strength);
+    let blink = (1.0 - ((time + 3.6).rem_euclid(6.4) - 0.18).abs() / 0.18).clamp(0.0, 1.0);
+    let sleepy = if status == Status::Paused { 1.0 } else { blink };
+    let wink = (tap_age * PI).sin().max(0.0).sqrt();
+    let eyes = [sleepy, sleepy.max(wink).max(hop.powi(3))];
+    el().absolute(0.0, 0.0)
+        .size(W as f32, H as f32)
+        .child(plate(
+            &paint.reflection,
+            fruit_x + 4.0,
+            195.0 - (fruit_y - 11.0) * 0.2,
+            fruit_w - 8.0,
+            31.0,
+        ))
+        .child(plate(&paint.fruit, fruit_x, fruit_y, fruit_w, fruit_h))
+        .children(
+            eyes.into_iter()
+                .enumerate()
+                .filter(|(_, shut)| *shut > 0.01)
+                .map(|(i, shut)| {
+                    let sx = fruit_w / TOMATO.width() as f32;
+                    let sy = fruit_h / TOMATO.height() as f32;
+                    plate(
+                        &paint.lids[i],
+                        fruit_x + (EYE_X[i] - LID_W / 2) as f32 * sx,
+                        fruit_y + (EYE_Y - LID_H / 2) as f32 * sy,
+                        LID_W as f32 * sx,
+                        LID_H as f32 * sy,
+                    )
+                    .opacity(shut)
+                }),
+        )
+        .child(gloss)
+}
+
+// Two side cannons fire paper streamers across the chamber. The timer sits below the glass.
+fn confetti(progress: f32, accent: Color) -> El {
+    let palette = [
+        accent,
+        rune::color::oklch(0.85, 0.14, 82.0),
+        rune::color::oklch(0.92, 0.09, 188.0),
+        rune::color::oklch(0.78, 0.16, 351.0),
+    ];
+    let mut shape = Shape::new();
+    for index in 0..72 {
+        let n = index as f32;
+        let hash = |salt: u32| grain(index, salt) + 0.5;
+        let t = (progress * 1.32 - hash(3) * 0.24).max(0.0);
+        let side = if index % 2 == 0 { 1.0 } else { -1.0 };
+        let x = CENTER
+            + side * (-167.0 + (95.0 + 230.0 * hash(8)) * t)
+            + (t * 11.0 + n).sin() * t * 6.0;
+        let y = 193.0 - (245.0 + 400.0 * hash(5)) * t + 490.0 * t * t;
+        if t == 0.0 || !(12.0..215.0).contains(&y) || !(12.0..372.0).contains(&x) {
+            continue;
+        }
+        let spin = n + t * (9.0 + hash(1) * 19.0);
+        let dx = (2.3 + hash(4) * 2.5) * spin.cos();
+        let dy = 3.3 * (spin * 0.67).sin();
+        let color = palette[index as usize % palette.len()].alpha((1.0 - progress).min(0.2) * 4.8);
+        shape = shape.line(
+            [x - dx, y - dy],
+            [x + dx, y + dy],
+            1.7 + hash(6),
+            LineCap::Butt,
+            color,
+        );
+    }
+    canvas(shape).absolute(0.0, 0.0).size(W as f32, H as f32)
+}
+
+pub fn view(
+    avatar: Avatar,
+    phase: Phase,
+    status: Status,
+    time: f32,
+    pulse: f32,
+    celebration: f32,
+    accent: Color,
+) -> El {
     CHAMBERS.with_borrow_mut(|cache| {
         let slot = &mut cache[match phase {
             Phase::Work => 0,
@@ -391,61 +514,29 @@ pub fn view(phase: Phase, status: Status, time: f32, pulse: f32, accent: Color) 
             *slot = Some(Chamber::new(phase, accent));
         }
         let chamber = slot.as_ref().expect("initialized chamber");
-        let tap_age = (2.0 - pulse).clamp(0.0, 1.0);
-        let spring = (tap_age * TAU * 1.7).sin() * (1.0 - tap_age).powi(2);
-        let bounce = (tap_age * PI).sin() * (1.0 - tap_age);
-        let fruit_w = SPRITE * (1.0 + 0.13 * spring);
-        let fruit_h = SPRITE * (1.0 - 0.15 * spring);
-        let fruit_x = CENTER - fruit_w * 0.5 + 1.8 * (time * 0.65).sin();
-        let fruit_y = 11.0 + (SPRITE - fruit_h) * 0.78 + 3.7 * (time * 1.1).sin()
-            - 2.8 * pulse.min(1.0)
-            - 19.0 * bounce;
-        let scan = fruit_w * (0.50 + 0.44 * (time * 0.61 - 0.8).sin());
-        let lamp_strength = if status == Status::Paused { 0.23 } else { 0.68 };
-        let gloss = el()
-            .absolute(fruit_x + scan - 13.0, fruit_y)
-            .size(26.0, fruit_h)
-            .clip_fade(12.5, 0.0, 12.5, 0.0)
-            .child(plate(&chamber.gloss, 13.0 - scan, 0.0, fruit_w, fruit_h))
-            .opacity(lamp_strength);
-        let blink = (1.0 - ((time + 3.6).rem_euclid(6.4) - 0.18).abs() / 0.18).clamp(0.0, 1.0);
-        let sleepy = if status == Status::Paused { 1.0 } else { blink };
-        let wink = (tap_age * PI).sin().max(0.0).sqrt();
-        let eyes = [sleepy, sleepy.max(wink)];
+        let pilot = match avatar {
+            Avatar::Tomato => tomato(
+                chamber
+                    .tomato
+                    .get_or_init(|| fruit_surfaces(phase, chamber.lamp)),
+                status,
+                time,
+                pulse,
+                celebration,
+            ),
+            Avatar::Clack => clack::view(phase, status, time, pulse, celebration, accent),
+            Avatar::Luma => luma::view(phase, status, time, pulse, celebration, accent),
+        };
         el().key("reactor")
             .size(W as f32, H as f32)
             .a11y_hidden()
             .child(plate(&chamber.backdrop, 0.0, 0.0, W as f32, H as f32).radius(10.0))
-            .child(plate(
-                &chamber.reflection,
-                fruit_x + 4.0,
-                195.0 - (fruit_y - 11.0) * 0.2,
-                fruit_w - 8.0,
-                31.0,
-            ))
             .child(light_trails(time, pulse, accent, false))
-            .child(plate(&chamber.fruit, fruit_x, fruit_y, fruit_w, fruit_h))
-            .children(
-                eyes.into_iter()
-                    .enumerate()
-                    .filter(|(_, shut)| *shut > 0.01)
-                    .map(|(i, shut)| {
-                        let sx = fruit_w / TOMATO.width() as f32;
-                        let sy = fruit_h / TOMATO.height() as f32;
-                        plate(
-                            &chamber.lids[i],
-                            fruit_x + (EYE_X[i] - LID_W / 2) as f32 * sx,
-                            fruit_y + (EYE_Y - LID_H / 2) as f32 * sy,
-                            LID_W as f32 * sx,
-                            LID_H as f32 * sy,
-                        )
-                        .opacity(shut)
-                    }),
-            )
-            .child(gloss)
+            .child(pilot)
             .child(plate(&chamber.near_ring, 0.0, 0.0, W as f32, H as f32))
             .child(light_trails(time, pulse, accent, true))
             .child(sight_marks(accent, pulse))
+            .children((celebration >= 0.0).then(|| confetti(celebration, accent)))
             .child(
                 el().absolute(0.0, 0.0)
                     .size(W as f32, H as f32)

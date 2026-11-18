@@ -3,6 +3,7 @@ use rune::{
     text,
 };
 
+use crate::avatar::Avatar;
 use crate::preferences::Preferences;
 use crate::theme::Theme;
 use crate::ui_shortcuts::ShortcutAction;
@@ -17,6 +18,7 @@ const BRAND: TextStyle = TextStyle::new(16.0, 800.0).tracking(2.6);
 const LEGEND: TextStyle = TextStyle::new(11.0, 680.0).tracking(0.8);
 const DIAL: TextStyle = TextStyle::new(88.0, 630.0).mono().tracking(-3.8).lh(96.0);
 const FACE_WIDTH: f32 = 384.0;
+pub const CHOOSE_AVATAR_KEY: &str = "choose-avatar";
 
 const TOMATO: Icon = Icon {
     name: "pomotroid-logo",
@@ -72,6 +74,11 @@ const PALETTE: Icon = Icon {
     name: "themes",
     view: 24.0,
     body: r#"<path d="M21 11.8c0-5.2-4.3-9.3-9.7-9.3A9.4 9.4 0 0 0 2 12c0 5.3 4.3 9.5 9.2 9.5 2.7 0 3.4-1.8 2.5-3.1-.5-.9.1-2 1.3-2h2c2.6 0 4-1.8 4-4.6ZM6 10a1.3 1.3 0 1 1 2.6 0A1.3 1.3 0 0 1 6 10Zm4-3.5a1.3 1.3 0 1 1 2.6 0 1.3 1.3 0 0 1-2.6 0Zm4.6 1.5a1.3 1.3 0 1 1 2.6 0 1.3 1.3 0 0 1-2.6 0ZM17 12a1.3 1.3 0 1 1 2.6 0 1.3 1.3 0 0 1-2.6 0Z" fill="currentColor" fill-rule="evenodd"/>"#,
+};
+const AVATAR: Icon = Icon {
+    name: "timer-avatar",
+    view: 24.0,
+    body: r#"<circle cx="12" cy="8" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M5 19v-1a7 7 0 0 1 14 0v1z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>"#,
 };
 const INFO: Icon = Icon {
     name: "about",
@@ -268,6 +275,13 @@ pub fn view(state: &State, cx: &mut Cx<State>) -> El {
 fn timer_view(state: &State, ink: Ink) -> El {
     let phase = state.timer.phase();
     let status = state.timer.status();
+    let avatar = state.prefs.avatar;
+    let boop = if avatar == Avatar::Tomato {
+        "Boop the tomato".to_owned()
+    } else {
+        format!("Boop {}", avatar.name())
+    };
+    let celebration = state.celebration_progress();
     let accent = match phase {
         Phase::Work => ink.focus,
         Phase::ShortBreak => ink.short,
@@ -283,21 +297,62 @@ fn timer_view(state: &State, ink: Ink) -> El {
         .child(
             el().size(FACE_WIDTH, 228.0)
                 .child(crate::reactor::view(
+                    avatar,
                     phase,
                     status,
                     state.visual_time,
                     state.pulse(),
+                    celebration.unwrap_or(-1.0),
                     accent,
                 ))
                 .child(
-                    button("boop", "Boop the tomato", ink)
+                    button("boop", &boop, ink)
                         .size(164.0, 160.0)
                         .absolute(110.0, 22.0)
                         .radius(66.0)
                         .hover(Color::TRANSPARENT)
                         .press(Color::TRANSPARENT)
-                        .help("Boop the tomato")
+                        .help(boop)
                         .on_press_tx(|state: &mut State, tx| state.boop(tx)),
+                )
+                .children(celebration.map(|_| {
+                    row()
+                        .size(130.0, 32.0)
+                        .pin(Some(12.0), None, None, Some(12.0))
+                        .radius(7.0)
+                        .center()
+                        .gap(6.0)
+                        .fill(ink.accent)
+                        .child(glyph(&CHECK, 15.0, ink.on_accent()))
+                        .child(
+                            text("Focus complete!")
+                                .key("focus-complete")
+                                .font(TextStyle::new(13.0, 750.0))
+                                .color(ink.on_accent()),
+                        )
+                }))
+                .child(
+                    button(CHOOSE_AVATAR_KEY, "Change avatar", ink)
+                        .size(124.0, 32.0)
+                        .pin(None, None, Some(12.0), Some(12.0))
+                        .fill(ink.well())
+                        .border_gradient(1.0, ink.line.alpha(0.80), ink.line.alpha(0.40))
+                        .on_press_tx(|state: &mut State, tx| {
+                            state.interface_click();
+                            state.open_avatar_gallery(tx);
+                        })
+                        .child(
+                            row()
+                                .center()
+                                .gap(6.0)
+                                .a11y_hidden()
+                                .child(glyph(&AVATAR, 15.0, ink.accent))
+                                .child(
+                                    text("Change avatar")
+                                        .font(LEGEND.tracking(0.1))
+                                        .color(ink.fg),
+                                ),
+                        ),
                 ),
         )
         .child(el().h(13.0))
@@ -551,6 +606,7 @@ pub fn tab_key(page: Page) -> &'static str {
         Page::Timer => "tab-timer",
         Page::Options => "tab-options",
         Page::Themes => "tab-themes",
+        Page::Avatars => "tab-avatars",
         Page::About => "tab-about",
     }
 }
@@ -560,6 +616,7 @@ fn page_name(page: Page) -> &'static str {
         Page::Timer => "Timer",
         Page::Options => "Options",
         Page::Themes => "Themes",
+        Page::Avatars => "Avatars",
         Page::About => "About",
     }
 }
@@ -569,6 +626,7 @@ fn drawer(state: &State, page: Page, ink: Ink) -> El {
         Page::Timer => ("Round lengths", timer_settings(state, ink)),
         Page::Options => ("Behavior and sound", options(state, ink)),
         Page::Themes => ("Console themes", themes(state, ink)),
+        Page::Avatars => ("Choose an avatar", avatars(state.prefs.avatar, ink)),
         Page::About => ("About Pomotroid", about(ink)),
     };
     let nav = row()
@@ -587,6 +645,7 @@ fn drawer(state: &State, page: Page, ink: Ink) -> El {
                 (Page::Timer, &CLOCK),
                 (Page::Options, &GEAR),
                 (Page::Themes, &PALETTE),
+                (Page::Avatars, &AVATAR),
                 (Page::About, &INFO),
             ]
             .map(|(tab, picture)| {
@@ -1206,6 +1265,97 @@ fn theme_sample(theme: &Theme, current: &str, ink: Ink) -> El {
                     el().size(19.0, 20.0)
                         .center()
                         .children(selected.then(|| glyph(&CHECK, 16.0, preview.accent))),
+                ),
+        )
+}
+
+fn avatars(current: Avatar, ink: Ink) -> El {
+    col()
+        .key("avatar-picker")
+        .w_full()
+        .grow(1.0)
+        .min_h(0.0)
+        .clip_rounded(10.0)
+        .scroll(ScrollSpec {
+            stick_bottom: false,
+        })
+        .child(
+            col()
+                .w_full()
+                .px(16.0)
+                .py(16.0)
+                .gap(12.0)
+                .children(Avatar::ALL.map(|avatar| avatar_option(avatar, current, ink))),
+        )
+}
+
+pub fn avatar_key(avatar: Avatar) -> String {
+    format!("avatar-{}", avatar.key())
+}
+
+fn avatar_option(avatar: Avatar, current: Avatar, ink: Ink) -> El {
+    let selected = avatar == current;
+    button(avatar_key(avatar), avatar.name(), ink)
+        .checked(selected)
+        .description_static(avatar.description())
+        .w_full()
+        .h(96.0)
+        .radius(9.0)
+        .gradient(ink.metal(), ink.panel)
+        .border_gradient(
+            1.0,
+            if selected {
+                ink.accent
+            } else {
+                ink.line.alpha(0.56)
+            },
+            if selected {
+                ink.accent.alpha(0.55)
+            } else {
+                ink.line.alpha(0.28)
+            },
+        )
+        .on_press_tx(move |state: &mut State, tx| state.choose_avatar(avatar, tx))
+        .child(
+            row()
+                .w_full()
+                .h_full()
+                .px(12.0)
+                .gap(14.0)
+                .center_y()
+                .a11y_hidden()
+                .child(
+                    el().size(84.0, 68.0)
+                        .radius(6.0)
+                        .center()
+                        .fill(ink.well())
+                        .border(1.0, ink.line.alpha(0.30))
+                        .child(crate::reactor::portrait(avatar)),
+                )
+                .child(
+                    col()
+                        .grow(1.0)
+                        .min_w(0.0)
+                        .gap(3.0)
+                        .child(
+                            text(avatar.name())
+                                .font(TextStyle::new(17.0, 720.0))
+                                .color(ink.fg),
+                        )
+                        .child(label(avatar.description(), ink.muted).w_full().wrap()),
+                )
+                .child(
+                    el().size(24.0, 24.0)
+                        .center()
+                        .radius(12.0)
+                        .border(1.0, ink.line.alpha(0.72))
+                        .children(selected.then(|| {
+                            el().size(24.0, 24.0)
+                                .center()
+                                .radius(12.0)
+                                .fill(ink.accent)
+                                .child(glyph(&CHECK, 15.0, ink.on_accent()))
+                        })),
                 ),
         )
 }

@@ -1,3 +1,4 @@
+use crate::avatar::Avatar;
 use chrono::{Local, SecondsFormat, Utc};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Map, Value};
@@ -21,6 +22,7 @@ pub struct Preferences {
     #[serde(deserialize_with = "read_number")]
     pub work_rounds: u32,
     pub theme: Option<String>,
+    pub avatar: Avatar,
     pub visual_motion: bool,
     pub interface_sounds: bool,
     pub tick_sounds: bool,
@@ -50,6 +52,7 @@ impl Default for Preferences {
             notifications: true,
             work_rounds: 4,
             theme: None,
+            avatar: Avatar::default(),
             visual_motion: true,
             interface_sounds: true,
             tick_sounds: false,
@@ -281,11 +284,13 @@ mod tests {
         assert_eq!(preferences.volume, 0);
         assert_eq!(preferences.theme.as_deref(), Some("Dracula"));
         assert!(preferences.visual_motion);
+        assert_eq!(preferences.avatar, Avatar::Tomato);
         assert!(preferences.interface_sounds);
         assert_eq!(preferences.global_shortcuts.toggle, "Shift+F4");
         assert_eq!(preferences.global_shortcuts.reset, "Control+F2");
 
         preferences.visual_motion = false;
+        preferences.avatar = Avatar::Clack;
         preferences.interface_sounds = false;
         preferences.reset_timer_defaults();
         store.save(&preferences).unwrap();
@@ -293,9 +298,17 @@ mod tests {
         let raw: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
         assert_eq!(raw["timeWork"], 25);
         assert_eq!(raw["visualMotion"], false);
+        assert_eq!(raw["avatar"], "clack");
         assert_eq!(raw["interfaceSounds"], false);
         assert_eq!(raw["futureOption"], serde_json::json!([1, 2, 3]));
         assert_eq!(raw["globalShortcuts"]["extra"], "F11");
+    }
+
+    #[test]
+    fn unknown_avatar_keeps_the_rest_of_the_profile() {
+        let prefs = parse_preferences(br#"{"avatar":"visitor","timeWork":37}"#).unwrap();
+        assert_eq!(prefs.avatar, Avatar::Tomato);
+        assert_eq!(prefs.time_work, 37);
     }
 
     #[test]
