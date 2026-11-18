@@ -6,7 +6,7 @@ Pomotroid is a desktop Pomodoro timer written in Rust. The native interface uses
 
 ## Run the timer
 
-Install Rust with rustup. On Windows, install the Visual Studio C++ build tools and the Windows SDK. On Linux, install the system development packages listed in the [build workflow](.github/workflows/build.yml).
+Install Rust with rustup. On Windows, install the Visual Studio C++ build tools and the Windows SDK. On Linux, install the [build and desktop runtime packages](CONTRIBUTING.md#build-and-run-pomotroid), including `libxkbcommon-x11-0` on Ubuntu for a windowed run.
 
 ```sh
 cargo run --locked --release
@@ -20,7 +20,7 @@ The release executable embeds the original sounds, fonts and 17 themes. On macOS
 
 The native app reads the Electron profile's `user-preferences.json`, user themes and daily activity log directory. It saves settings when you change them. Set `POMOTROID_HOME` to a separate directory to try the port with an isolated profile. See the [theme format and profile locations](docs/themes/themes.md).
 
-Local integrations can connect to `ws://127.0.0.1:1314`. Send `{"event":"getState"}` to read the current state. The app broadcasts `roundChange` with the same `data.state` field. States are `idle`, `work`, `short-break`, `long-break` and `paused`. If another instance owns the port, the timer still runs.
+Local integrations can connect to `ws://127.0.0.1:1314`. A browser integration must serve its page from a loopback HTTP or HTTPS origin. Send `{"event":"getState"}` to read the current state. The app broadcasts `roundChange` with the same `data.state` field. States are `idle`, `work`, `short-break`, `long-break` and `paused`. If another instance owns the port, the timer still runs.
 
 ## Verify the port
 
