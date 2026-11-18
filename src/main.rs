@@ -5,14 +5,15 @@
 
 mod desktop;
 mod preferences;
+mod reactor;
 mod theme;
 mod timer;
 mod ui;
 mod ui_shortcuts;
 
-use std::time::Duration;
+use std::{cell::Cell, time::Duration};
 
-use desktop::{Desktop, DesktopAction};
+use desktop::{Cue, Desktop, DesktopAction};
 use preferences::{ActivityLog, Preferences, PreferencesStore};
 use rune::{
     App, AppHandle, AppSpec, Key, KeyEvent, LiveRegion, Mods, Tx, WindowHandle, WindowOptions,
@@ -21,8 +22,9 @@ use theme::{Theme, bundled_themes, load_themes, selected_theme};
 use timer::{Phase, Status, Timer, TimerConfig, TimerEvent};
 use ui_shortcuts::Shortcuts;
 
-const SIZE: (f32, f32) = (360.0, 478.0);
-const TITLEBAR_HEIGHT: f32 = 50.0;
+const SIZE: (f32, f32) = (432.0, 620.0);
+const TITLEBAR_HEIGHT: f32 = 46.0;
+const FRAME_INTERVAL: f64 = 1.0 / 30.0;
 const FONTS: &[&[u8]] = &[
     include_bytes!("../static/fonts/Lato-Regular.ttf"),
     include_bytes!("../static/fonts/RobotoMono-Light.ttf"),
@@ -67,6 +69,11 @@ struct State {
     last_volume: u32,
     save_error: Option<String>,
     last_clock: f64,
+    visual_time: f32,
+    visual_clock: f64,
+    impact: f32,
+    system_reduced_motion: Cell<bool>,
+    headless: bool,
 }
 
 fn timer_config(prefs: &Preferences) -> TimerConfig {
@@ -153,6 +160,11 @@ impl State {
             last_volume,
             save_error,
             last_clock: 0.0,
+            visual_time: 0.0,
+            visual_clock: 0.0,
+            impact: 0.0,
+            system_reduced_motion: Cell::new(false),
+            headless,
         }
     }
 
@@ -173,11 +185,20 @@ impl State {
             tx.focus_when_shown(ui::tab_key(page), tx.focus_visible());
         } else {
             tx.focus_when_shown("settings", tx.focus_visible());
+            self.visual_clock = tx.clock();
+            self.schedule(tx);
         }
     }
 
     fn play_timer(&mut self, action: TimerAction, tx: &mut Tx) {
         self.advance_to(tx.clock(), tx);
+        let cue = match (action, self.timer.status()) {
+            (TimerAction::Toggle, Status::Running) => Cue::Pause,
+            (TimerAction::Toggle, _) => Cue::Start,
+            (TimerAction::Reset, _) => Cue::Reset,
+            (TimerAction::Skip, _) => Cue::Click,
+        };
+        self.desktop.cue(cue, self.prefs.volume);
         let event = match action {
             TimerAction::Toggle => self.timer.toggle(),
             TimerAction::Reset => self.timer.reset(),
@@ -203,6 +224,10 @@ impl State {
     }
 
     fn handle_timer_event(&mut self, event: TimerEvent, tx: &mut Tx) {
+        if !matches!(event, TimerEvent::Tick(_)) {
+            self.visual_clock = tx.clock();
+            self.impact = 1.0;
+        }
         let log = match event {
             TimerEvent::Started(phase) => Some((phase, "started")),
             TimerEvent::Resumed(phase) => Some((phase, "resumed")),
@@ -261,6 +286,63 @@ impl State {
         {
             tx.wake_after(Duration::from_millis(250));
         }
+        if self.animate_reactor() {
+            tx.wake_at(self.visual_clock + FRAME_INTERVAL);
+        }
+    }
+
+    fn interface_click(&self) {
+        self.desktop.cue(Cue::Click, self.prefs.volume);
+    }
+
+    fn boop(&mut self, tx: &mut Tx) {
+        self.desktop.cue(Cue::Boop, self.prefs.volume);
+        self.visual_clock = tx.clock();
+        self.impact = 2.0;
+        self.schedule(tx);
+    }
+
+    fn motion_enabled(&self) -> bool {
+        self.prefs.visual_motion && !self.system_reduced_motion.get()
+    }
+
+    fn animate_reactor(&self) -> bool {
+        self.motion_enabled()
+            && self.drawer.is_none()
+            && (self.timer.status() != Status::Paused || self.impact > 0.0)
+            && (self.headless
+                || (self.app.as_ref().is_some_and(AppHandle::is_visible)
+                    && !self.window_minimized()))
+    }
+
+    fn pulse(&self) -> f32 {
+        if self.motion_enabled() {
+            self.impact
+        } else {
+            0.0
+        }
+    }
+
+    fn advance_reactor(&mut self, clock: f64) -> bool {
+        if !self.animate_reactor() {
+            self.visual_clock = clock;
+            self.impact = 0.0;
+            return false;
+        }
+        let elapsed = clock - self.visual_clock;
+        if elapsed + 0.000_001 < FRAME_INTERVAL {
+            return false;
+        }
+        self.visual_clock = clock;
+        let speed = match self.timer.status() {
+            Status::Paused => 0.0,
+            Status::Running => 1.0,
+            Status::Ready | Status::Waiting => 0.5,
+        };
+        self.visual_time += elapsed.min(0.12) as f32 * speed;
+        let decay = if self.impact > 1.0 { 2.7 } else { 1.6 };
+        self.impact = (self.impact - elapsed as f32 * decay).max(0.0);
+        true
     }
 
     fn hover_volume(&mut self, over: bool, tx: &mut Tx) {
@@ -352,6 +434,7 @@ impl State {
 fn poll(state: &mut State, clock: f64, tx: &mut Tx) -> bool {
     state.hide_minimized_window();
     let mut changed = state.advance_to(clock, tx);
+    changed |= state.advance_reactor(clock);
     if state.volume_popup.is_some_and(|due| due <= clock) && state.range_draft.is_none() {
         state.volume_popup = None;
         changed = true;
@@ -403,6 +486,22 @@ fn on_key(state: &mut State, key: &KeyEvent, tx: &mut Tx) -> bool {
     false
 }
 
+fn view(state: &State, cx: &mut rune::Cx<State>) -> rune::El {
+    let reduced = cx.system_reduced_motion();
+    let was_reduced = state.system_reduced_motion.replace(reduced);
+    cx.reduced_motion(reduced || !state.prefs.visual_motion);
+    if was_reduced
+        && !reduced
+        && let Some(app) = &state.app
+    {
+        app.update_if(|state, tx| {
+            state.schedule(tx);
+            false
+        });
+    }
+    ui::view(state, cx)
+}
+
 fn spec() -> AppSpec<State> {
     AppSpec {
         min_size: Some(SIZE),
@@ -425,7 +524,7 @@ fn spec() -> AppSpec<State> {
                 }
             }),
         ],
-        ..AppSpec::new("Pomotroid", SIZE, || State::new(true, None), ui::view)
+        ..AppSpec::new("Pomotroid", SIZE, || State::new(true, None), view)
     }
 }
 
@@ -447,9 +546,11 @@ fn main() {
         })
         .titlebar(rune::Titlebar::new(TITLEBAR_HEIGHT))
         .keep_running()
-        .on_focus(|state, focused, _| {
+        .on_focus(|state, focused, tx| {
             if !focused {
                 state.shortcuts.capture = None;
+            } else {
+                state.schedule(tx);
             }
         })
         .on_close(on_close);

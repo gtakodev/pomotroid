@@ -5,6 +5,8 @@ mod audio;
 mod socket;
 mod tray;
 
+pub use audio::Cue;
+
 pub enum DesktopAction {
     Show(Option<String>),
     Quit,
@@ -14,6 +16,7 @@ pub struct Desktop {
     headless: bool,
     handler: Arc<dyn Fn(DesktopAction) + Send + Sync>,
     audio: Option<audio::Audio>,
+    interface_sounds: bool,
     socket: Option<socket::StateServer>,
     tray: Option<tray::Tray>,
     durations: [u32; 3],
@@ -26,6 +29,7 @@ impl Desktop {
             headless,
             handler,
             audio: None,
+            interface_sounds: true,
             socket: None,
             tray: None,
             durations: [25, 5, 15],
@@ -47,6 +51,7 @@ impl Desktop {
             prefs.time_short_break,
             prefs.time_long_break,
         ];
+        self.interface_sounds = prefs.interface_sounds;
         if self.headless {
             return;
         }
@@ -81,6 +86,14 @@ impl Desktop {
     pub fn tick(&self, volume: u32) {
         if let Some(audio) = &self.audio {
             audio.play(audio::Sound::Tick, volume);
+        }
+    }
+
+    pub fn cue(&self, cue: Cue, volume: u32) {
+        if self.interface_sounds
+            && let Some(audio) = &self.audio
+        {
+            audio.cue(cue, volume);
         }
     }
 

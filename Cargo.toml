@@ -10,6 +10,7 @@ name = "pomotroid"
 path = "src/main.rs"
 
 [dependencies]
+image = { version = "0.25", default-features = false, features = ["png"] }
 chrono = "0.4"
 csscolorparser = "0.9"
 dirs = "6"

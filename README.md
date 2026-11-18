@@ -2,7 +2,9 @@
 
 Pomotroid is a desktop Pomodoro timer written in Rust. The native interface uses [Rune](https://github.com/anomalyco/rune). The default cycle has four 25-minute focus rounds, five-minute short breaks and a 15-minute long break.
 
-![The Pomotroid focus timer in Rune](.github/images/pomotroid-rune.png)
+![The Tomato Reactor, with a floating red tomato above the focus timer](.github/images/pomotroid-rune.png)
+
+[Watch the tomato bounce and switch to break lighting](.github/images/tomato-reactor.webp).
 
 ## Run the timer
 
@@ -12,7 +14,9 @@ Install Rust with rustup. On Windows, install the Visual Studio C++ build tools 
 cargo run --locked --release
 ```
 
-Press **Space** to start or pause. **Reset** restarts the current round. **Skip** advances to the next phase and credits the current focus round. Open the menu to change the durations, number of rounds, automatic starts, theme and global shortcuts. Use the speaker control to change the volume.
+Press **Space** to start or pause. **Reset** restarts the current round. **Skip** advances to the next phase and credits the current focus round. Click the tomato to make it bounce. The chamber lights change with each phase, and the clock stays in place.
+
+Open the gear to change durations, rounds, automatic starts, themes and global shortcuts. Under **Options**, switch **Animation** and **Interface sounds** on or off independently. The reactor also follows the system’s reduced-motion setting. Use the speaker control to mute or adjust the volume.
 
 The release executable embeds the original sounds, fonts and 17 themes. On macOS use the application bundle for desktop notifications. On Linux, notifications use `notify-send` and hiding to the tray requires a desktop panel with a StatusNotifier host.
 

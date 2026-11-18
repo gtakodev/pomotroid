@@ -7,6 +7,12 @@ import tempfile
 from pathlib import Path
 
 
+def accessible_nodes(node):
+    yield node
+    for child in node.get("children", []):
+        yield from accessible_nodes(child)
+
+
 def check(binary, directory, name, actions, at, expected):
     script = directory / f"{name}-input.json"
     tree = directory / f"{name}-tree.json"
@@ -16,19 +22,55 @@ def check(binary, directory, name, actions, at, expected):
         check=True,
         timeout=60,
     )
-    elements = json.loads(tree.read_text(encoding="utf-8"))["elements"]
-    controls = {element.get("key"): element for element in elements}
+    snapshot = json.loads(tree.read_text(encoding="utf-8"))
+    controls = {element.get("key"): element for element in snapshot["elements"]}
+    accessible = {node.get("key"): node for node in accessible_nodes(snapshot["accessibility"])}
     for key, field, value in expected:
-        actual = controls[key].get(field)
+        if field == "checked":
+            actual = "checked" in accessible[key]["states"]
+        else:
+            actual = controls[key].get(field)
         if actual != value:
             raise AssertionError(f"{name}: {key}.{field} expected {value!r}, got {actual!r}")
     print(f"Passed {name}")
+
+
+def check_motion(binary, directory):
+    script = directory / "reduce-motion.json"
+    script.write_text(json.dumps([
+        {"t": 0.1, "key": "settings"},
+        {"t": 0.25, "key": "tab-options"},
+        {"t": 0.4, "key": "visual-motion"},
+        {"t": 0.6, "key": "settings"},
+    ]), encoding="utf-8")
+    for motion in (True, False):
+        snapshots = []
+        for at in ("1", "2"):
+            png = directory / f"motion-{motion}-{at}.png"
+            args = [binary, "--at", at, "--scale", "1", "--crop", "reactor", "--snap", png]
+            if not motion:
+                args += ["--script", script]
+            subprocess.run(args, check=True, timeout=60, capture_output=True)
+            snapshots.append(png.read_bytes())
+        if (snapshots[0] != snapshots[1]) != motion:
+            raise AssertionError(f"Reactor movement disagrees with Animation={motion}")
+    print("Passed animated and still reactor captures")
 
 
 def main():
     binary = Path(sys.argv[1]).resolve(strict=True)
     with tempfile.TemporaryDirectory() as folder:
         directory = Path(folder)
+        check(binary, directory, "Boop the tomato without starting the clock", [
+            {"t": 0.2, "key": "boop"},
+        ], 1.5, [("time-left", "text", "25:00"), ("start-pause", "label", "Start timer")])
+        check(binary, directory, "Set motion and interface sounds independently", [
+            {"t": 0.1, "key": "settings"},
+            {"t": 0.35, "key": "tab-options"},
+            {"t": 0.6, "key": "visual-motion"},
+            {"t": 0.85, "key": "interface-sounds"},
+            {"t": 1.1, "key": "visual-motion"},
+        ], 1.5, [("visual-motion", "checked", True), ("interface-sounds", "checked", False)])
         check(binary, directory, "Pause using the global shortcut", [
             {"t": 0.1, "key": "start-pause"},
             {"t": 2.4, "shortcut": "ctrl+f1"},
@@ -44,6 +86,7 @@ def main():
             {"t": 0.1, "key": "skip"},
         ], 3.0, [("phase", "text", "SHORT BREAK"), ("time-left", "text", "4:59"),
                  ("start-pause", "label", "Pause timer")])
+        check_motion(binary, directory)
 
 
 if __name__ == "__main__":

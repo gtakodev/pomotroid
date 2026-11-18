@@ -205,6 +205,8 @@ try {
 
     Read-TimerEvent 'getState' 'idle'
     [void](Wait-For 'the two-minute focus timer' { Find-UiElement '2:00' })
+    Invoke-Button 'Boop the tomato'
+    [void](Wait-For 'the start control after a boop' { Find-UiElement 'Start timer' })
     Invoke-Button 'Start timer'
     Read-TimerEvent 'roundChange' 'work'
     Invoke-Button 'Pause timer'

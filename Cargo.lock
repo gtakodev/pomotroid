@@ -3203,6 +3203,7 @@ dependencies = [
  "csscolorparser",
  "dirs",
  "futures-util",
+ "image",
  "ksni",
  "rodio",
  "rune",

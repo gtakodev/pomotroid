@@ -1,8 +1,7 @@
 use rune::{
-    Color, Cursor, Cx, El, Icon, LineCap, Phase as DragPhase, ScrollSpec, Shape, TextStyle, Tx,
-    canvas, col, el, icon, row, text,
+    Color, Cursor, Cx, El, Icon, Phase as DragPhase, ScrollSpec, TextStyle, Tx, col, el, icon, row,
+    text,
 };
-use std::f32::consts::TAU;
 
 use crate::preferences::Preferences;
 use crate::theme::Theme;
@@ -12,15 +11,17 @@ use crate::{
     timer::{Phase, Status},
 };
 
-const BODY: TextStyle = TextStyle::new(14.0, 400.0).tracking(0.35);
-const NUMBER: TextStyle = TextStyle::new(13.0, 300.0).mono();
-const TITLE: TextStyle = TextStyle::new(16.0, 400.0).tracking(0.7);
-const DIAL: TextStyle = TextStyle::new(46.0, 300.0).mono().lh(56.0);
+const BODY: TextStyle = TextStyle::new(14.0, 480.0);
+const NUMBER: TextStyle = TextStyle::new(13.0, 560.0).mono();
+const BRAND: TextStyle = TextStyle::new(16.0, 800.0).tracking(2.6);
+const LEGEND: TextStyle = TextStyle::new(11.0, 680.0).tracking(0.8);
+const DIAL: TextStyle = TextStyle::new(88.0, 630.0).mono().tracking(-3.8).lh(96.0);
+const FACE_WIDTH: f32 = 384.0;
 
-const MENU: Icon = Icon {
-    name: "settings-menu",
+const TOMATO: Icon = Icon {
+    name: "pomotroid-logo",
     view: 24.0,
-    body: r#"<path d="M2 8h20M2 16h10" stroke="currentColor" stroke-width="2"/>"#,
+    body: r#"<path d="M12 8C8.4 5.5 3 8.2 3 13.5 3 18.1 6.8 21 12 21s9-2.9 9-7.5C21 8.2 15.6 5.5 12 8Z" fill="currentColor"/><path d="M12 3v5m-5-4 5 4 5-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M7 13.5c0-1.1.7-2 1.7-2.5" fill="none" stroke="white" stroke-opacity=".65" stroke-linecap="round" stroke-width="1.15"/>"#,
 };
 const BACK: Icon = Icon {
     name: "settings-back",
@@ -41,6 +42,11 @@ const SKIP: Icon = Icon {
     name: "timer-skip",
     view: 24.0,
     body: r#"<path d="M6 4v16l10-8zM17 4h2v16h-2z" fill="currentColor"/>"#,
+};
+const RESET: Icon = Icon {
+    name: "timer-reset",
+    view: 24.0,
+    body: r#"<path d="M4 11a8 8 0 1 1 2.2 6.6M4 6v5h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>"#,
 };
 const SOUND: Icon = Icon {
     name: "sound",
@@ -93,28 +99,70 @@ struct Ink {
 
 impl From<&Theme> for Ink {
     fn from(t: &Theme) -> Self {
-        fn rgba(value: u32) -> Color {
-            let [r, g, b, a] = value
-                .to_be_bytes()
-                .map(|channel| f32::from(channel) / 255.0);
-            let linear = rune::color::srgb_decode;
-            Color {
-                r: linear(r),
-                g: linear(g),
-                b: linear(b),
-                a,
-            }
+        if t.name == "Pomotroid" {
+            return Self {
+                bg: rgba(0x14101bff),
+                panel: rgba(0x282134ff),
+                line: rgba(0x827290ff),
+                fg: rgba(0xfff4e5ff),
+                muted: rgba(0xbaaecaff),
+                accent: rgba(0xd6fb65ff),
+                focus: rgba(0xff5f69ff),
+                short: rgba(0x78f4c7ff),
+                long: rgba(0xe4a6ffff),
+            };
         }
+        let bg = rgba(t.background);
+        let panel = rgba(t.background_light);
+        let line = rgba(t.background_lightest);
+        let fg = rgba(t.foreground);
+        let muted = rgba(t.foreground_darker);
+        let muted_is_readable = [bg, panel.mix(line, 0.13)].into_iter().all(|surface| {
+            let text = muted.luminance() + 0.05;
+            let fill = surface.luminance() + 0.05;
+            text.max(fill) / text.min(fill) >= 4.5
+        });
         Self {
-            bg: rgba(t.background),
-            panel: rgba(t.background_light),
-            line: rgba(t.background_lightest),
-            fg: rgba(t.foreground),
-            muted: rgba(t.foreground_darker),
+            bg,
+            panel,
+            line,
+            fg,
+            muted: if muted_is_readable { muted } else { fg },
             accent: rgba(t.accent),
             focus: rgba(t.focus_round),
             short: rgba(t.short_round),
             long: rgba(t.long_round),
+        }
+    }
+}
+
+fn rgba(value: u32) -> Color {
+    let [r, g, b, a] = value
+        .to_be_bytes()
+        .map(|channel| f32::from(channel) / 255.0);
+    let linear = rune::color::srgb_decode;
+    Color {
+        r: linear(r),
+        g: linear(g),
+        b: linear(b),
+        a,
+    }
+}
+
+impl Ink {
+    fn metal(self) -> Color {
+        self.panel.mix(self.line, 0.13)
+    }
+
+    fn well(self) -> Color {
+        self.bg.mix(self.fg, 0.005)
+    }
+
+    fn on_accent(self) -> Color {
+        if self.accent.luminance() > 0.18 {
+            Color::BLACK
+        } else {
+            Color::WHITE
         }
     }
 }
@@ -136,12 +184,12 @@ fn button(key: impl Into<String>, name: &str, ink: Ink) -> El {
         .role("button")
         .label(name)
         .center()
-        .radius(5.0)
+        .radius(7.0)
         .focusable(true)
-        .focus_ring(1.5, 1.0, ink.accent)
+        .focus_ring(2.0, 2.0, ink.accent)
         .cursor(Cursor::Pointer)
-        .hover(ink.line.alpha(0.12))
-        .press(ink.line.alpha(0.20))
+        .hover(ink.line.alpha(0.22))
+        .press(Color::BLACK.alpha(0.24))
 }
 
 fn glyph(symbol: &'static Icon, size: f32, color: Color) -> El {
@@ -151,18 +199,27 @@ fn glyph(symbol: &'static Icon, size: f32, color: Color) -> El {
 pub fn view(state: &State, cx: &mut Cx<State>) -> El {
     let ink = Ink::from(state.theme());
     let inset = cx.chrome_insets();
-    cx.caption_color(ink.line);
+    cx.caption_color(ink.muted);
     let title = el()
         .w_full()
         .h(TITLEBAR_HEIGHT)
         .window_drag()
-        .center()
+        .gradient(ink.metal(), ink.panel)
+        .border_sides([1.0, 0.0, 1.0, 0.0], ink.line.alpha(0.34))
         .child(
-            text("Pomotroid")
-                .font(TITLE)
-                .color(ink.short)
-                .role("heading")
-                .level(1),
+            row()
+                .h(TITLEBAR_HEIGHT)
+                .absolute(inset.leading + 23.0, 0.0)
+                .gap(9.0)
+                .center_y()
+                .child(glyph(&TOMATO, 23.0, ink.focus))
+                .child(
+                    text("POMOTROID")
+                        .font(BRAND)
+                        .color(ink.fg)
+                        .role("heading")
+                        .level(1),
+                ),
         )
         .child(
             button(
@@ -174,17 +231,25 @@ pub fn view(state: &State, cx: &mut Cx<State>) -> El {
                 },
                 ink,
             )
-            .size(42.0, 40.0)
-            .absolute(inset.leading + 7.0, 7.0)
+            .size(36.0, 32.0)
+            .pin(
+                None,
+                Some((TITLEBAR_HEIGHT - 32.0) / 2.0),
+                Some(inset.trailing + 16.0),
+                None,
+            )
+            .fill(ink.bg)
+            .border_gradient(1.0, ink.line.alpha(0.64), ink.line.alpha(0.22))
             .no_window_drag()
             .expanded(state.drawer.is_some())
             .on_press_tx(|state: &mut State, tx| {
+                state.interface_click();
                 state.select_page(state.drawer.is_none().then_some(state.last_page), tx);
             })
             .child(glyph(
-                if state.drawer.is_some() { &BACK } else { &MENU },
-                22.0,
-                ink.line,
+                if state.drawer.is_some() { &BACK } else { &GEAR },
+                16.0,
+                ink.accent,
             )),
         );
     let content = state
@@ -194,197 +259,291 @@ pub fn view(state: &State, cx: &mut Cx<State>) -> El {
         .key("pomotroid")
         .w_full()
         .h_full()
-        .fill(ink.bg)
+        .gradient(ink.panel, ink.bg)
+        .border_sides([0.0, 1.0, 1.0, 1.0], ink.line.alpha(0.46))
         .child(title)
         .child(content)
 }
 
-fn dial_shape(fraction: f32, accent: Color, line: Color) -> Shape {
-    const CENTER: f32 = 110.0;
-    const RADIUS: f32 = 105.0;
-    let points = |count: u32, turn: f32| {
-        (0..=count)
-            .map(|i| {
-                let angle = TAU * turn * i as f32 / count as f32;
-                let (s, c) = angle.sin_cos();
-                [CENTER + RADIUS * s, CENTER - RADIUS * c]
-            })
-            .collect::<Vec<_>>()
-    };
-    let mut shape = Shape::new().stroke_with(points(120, 1.0), true, 2.0, LineCap::Butt, line);
-    if fraction >= 1.0 {
-        return shape.stroke_with(points(120, 1.0), true, 9.5, LineCap::Round, accent);
-    }
-    if fraction > 0.0 {
-        shape = shape.stroke_with(
-            points((fraction * 120.0).ceil() as u32, fraction),
-            false,
-            9.5,
-            LineCap::Round,
-            accent,
-        );
-    }
-    shape
-}
-
 fn timer_view(state: &State, ink: Ink) -> El {
     let phase = state.timer.phase();
-    let remaining = state.timer.remaining_seconds();
-    let fraction = remaining as f32 / state.timer.total_seconds() as f32;
-    let time = format!("{}:{:02}", remaining / 60, remaining % 60);
+    let status = state.timer.status();
     let accent = match phase {
         Phase::Work => ink.focus,
         Phase::ShortBreak => ink.short,
         Phase::LongBreak => ink.long,
     };
-    let (action, symbol) = match state.timer.status() {
-        Status::Running => ("Pause timer", &PAUSE),
-        Status::Paused => ("Resume timer", &PLAY),
-        _ => ("Start timer", &PLAY),
-    };
-
-    let dial = el()
-        .key("dial")
-        .size(220.0, 220.0)
-        .child(
-            canvas(dial_shape(fraction, accent, ink.line))
-                .size(220.0, 220.0)
-                .absolute(0.0, 0.0)
-                .a11y_hidden(),
-        )
-        .child(
-            row()
-                .size(220.0, 56.0)
-                .absolute(0.0, 74.0)
-                .center()
-                .child(text(time).key("time-left").font(DIAL).color(ink.fg)),
-        )
-        .child(
-            row().size(220.0, 24.0).absolute(0.0, 143.0).center().child(
-                text(phase_name(phase).to_uppercase())
-                    .key("phase")
-                    .font(TITLE.tracking(1.5))
-                    .color(ink.fg),
-            ),
-        );
-
-    let mut rounds = row().gap(4.0).center_y().child(
-        label(
-            format!("{}/{}", state.timer.round(), state.prefs.work_rounds),
-            ink.fg,
-        )
-        .key("round"),
-    );
-    if state.timer.completed_work() > 0 {
-        rounds = rounds.child(
-            text(format!("({})", state.timer.completed_work()))
-                .key("completed-work")
-                .font(TextStyle::new(11.0, 400.0))
-                .color(ink.muted)
-                .description_static("Focus rounds completed"),
-        );
-    }
-
-    let footer = row()
-        .key("timer-footer")
-        .w_full()
-        .h(62.0)
-        .px(14.0)
-        .justify_between()
-        .center_y()
-        .child(
-            col().items_start().gap(2.0).child(rounds).child(
-                button("reset", "Reset timer", ink)
-                    .size(54.0, 27.0)
-                    .on_press_tx(|state: &mut State, tx| state.play_timer(TimerAction::Reset, tx))
-                    .child(label("Reset", ink.muted)),
-            ),
-        )
-        .child(
-            row()
-                .gap(1.0)
-                .child(
-                    button("skip", "Skip round", ink)
-                        .size(36.0, 36.0)
-                        .help("Skip round")
-                        .on_press_tx(|state: &mut State, tx| {
-                            state.play_timer(TimerAction::Skip, tx)
-                        })
-                        .child(glyph(&SKIP, 20.0, ink.line)),
-                )
-                .child(
-                    button(
-                        "mute",
-                        if state.prefs.volume == 0 {
-                            "Unmute"
-                        } else {
-                            "Mute"
-                        },
-                        ink,
-                    )
-                    .size(38.0, 36.0)
-                    .help("Mute or adjust volume")
-                    .on_hover_change(State::hover_volume)
-                    .on_press_tx(|state: &mut State, tx| {
-                        let volume = if state.prefs.volume == 0 {
-                            state.last_volume
-                        } else {
-                            0
-                        };
-                        RangeSetting::Volume.set(state, volume, tx);
-                    })
-                    .child(glyph(
-                        if state.prefs.volume == 0 {
-                            &MUTE
-                        } else {
-                            &SOUND
-                        },
-                        21.0,
-                        ink.line,
-                    )),
-                ),
-        );
 
     let timer = col()
         .key("timer")
         .w_full()
         .grow(1.0)
         .items_center()
-        .child(el().h(53.0))
-        .child(dial)
-        .child(el().h(20.0))
+        .child(el().grow(1.0).min_h(14.0))
+        .child(
+            el().size(FACE_WIDTH, 228.0)
+                .child(crate::reactor::view(
+                    phase,
+                    status,
+                    state.visual_time,
+                    state.pulse(),
+                    accent,
+                ))
+                .child(
+                    button("boop", "Boop the tomato", ink)
+                        .size(164.0, 160.0)
+                        .absolute(110.0, 22.0)
+                        .radius(66.0)
+                        .hover(Color::TRANSPARENT)
+                        .press(Color::TRANSPARENT)
+                        .help("Boop the tomato")
+                        .on_press_tx(|state: &mut State, tx| state.boop(tx)),
+                ),
+        )
+        .child(el().h(13.0))
+        .child(timer_display(state, phase, status, accent, ink))
+        .child(el().h(16.0))
+        .child(timer_controls(state, status, ink))
+        .child(
+            row()
+                .h(35.0)
+                .gap(5.0)
+                .center()
+                .a11y_hidden()
+                .children((0..11).map(|_| {
+                    el().size(8.0, 2.0)
+                        .radius(1.0)
+                        .gradient(ink.well(), ink.line.alpha(0.48))
+                })),
+        )
+        .child(el().grow(1.0).min_h(10.0));
+    timer.children(state.volume_popup.map(|_| {
+        col()
+            .key("volume-popover")
+            .size(154.0, 65.0)
+            .padding(11.0)
+            .items_center()
+            .pin(None, None, Some(24.0), Some(129.0))
+            .raise()
+            .radius(8.0)
+            .gradient(ink.metal(), ink.panel)
+            .border_gradient(1.0, ink.line, ink.line.alpha(0.30))
+            .shadow(5.0, 12.0, Color::BLACK.alpha(0.58))
+            .on_hover_change(State::hover_volume)
+            .child(label(
+                format!("Volume {}%", RangeSetting::Volume.get(state)),
+                ink.fg,
+            ))
+            .child(slider(state, RangeSetting::Volume, ink.accent, ink, 126.0))
+    }))
+}
+
+fn timer_display(state: &State, phase: Phase, status: Status, accent: Color, ink: Ink) -> El {
+    let remaining = state.timer.remaining_seconds();
+    let fraction = remaining as f32 / state.timer.total_seconds() as f32;
+    let time = format!("{}:{:02}", remaining / 60, remaining % 60);
+    let status_name = match status {
+        Status::Running => "Running",
+        Status::Paused => "Paused",
+        Status::Waiting => "Starting",
+        Status::Ready => "Ready",
+    };
+    let dot = el()
+        .size(8.0, 8.0)
+        .radius(4.0)
+        .fill(accent)
+        .shadow(0.0, 12.0, accent.alpha(0.74))
+        .a11y_hidden();
+    let progress = el()
+        .w_full()
+        .h(5.0)
+        .radius(2.0)
+        .fill(ink.line.alpha(0.22))
+        .a11y_hidden()
+        .child(
+            el().w(340.0 * fraction)
+                .h(5.0)
+                .radius(2.0)
+                .gradient(accent.mix(Color::WHITE, 0.23), accent)
+                .shadow(0.0, 8.0, accent.alpha(0.36)),
+        );
+
+    col()
+        .key("dial")
+        .size(FACE_WIDTH, 166.0)
+        .px(22.0)
+        .pt(13.0)
+        .radius(11.0)
+        .fill(ink.well())
+        .radial_gradient(
+            [0.48, 0.30],
+            [230.0, 145.0],
+            [(0.0, accent.alpha(0.048)), (1.0, accent.alpha(0.0))],
+        )
+        .border_gradient(1.0, Color::BLACK.alpha(0.74), ink.line.alpha(0.49))
+        .child(
+            row()
+                .w_full()
+                .h(21.0)
+                .center_y()
+                .justify_between()
+                .child(
+                    row().gap(8.0).center_y().child(dot).child(
+                        text(phase_name(phase).to_uppercase())
+                            .key("phase")
+                            .font(LEGEND.tracking(1.35))
+                            .color(ink.fg),
+                    ),
+                )
+                .child(text(status_name).font(LEGEND).color(ink.muted)),
+        )
+        .child(
+            row()
+                .w_full()
+                .h(89.0)
+                .center()
+                .child(text(time).key("time-left").font(DIAL).color(ink.fg)),
+        )
+        .child(progress)
+        .child(round_meter(state, accent, ink))
+}
+
+fn round_meter(state: &State, accent: Color, ink: Ink) -> El {
+    let current = state.timer.round();
+    let total = state.prefs.work_rounds;
+    let completed = state.timer.completed_work();
+    row()
+        .w_full()
+        .h(29.0)
+        .gap(9.0)
+        .center_y()
+        .child(text("Round").font(LEGEND).color(ink.muted).a11y_hidden())
+        .child(
+            text(format!("{current}/{total}"))
+                .key("round")
+                .font(NUMBER)
+                .color(ink.fg)
+                .description_static("Current round / total rounds"),
+        )
+        .child(el().grow(1.0))
+        .child(
+            row()
+                .gap(4.0)
+                .center_y()
+                .a11y_hidden()
+                .children((1..=total).map(|round| {
+                    let pip = el().size(12.0, 6.0).radius(2.0);
+                    match round.cmp(&current) {
+                        std::cmp::Ordering::Less => pip.fill(ink.focus.alpha(0.64)),
+                        std::cmp::Ordering::Equal => {
+                            pip.fill(accent).shadow(0.0, 7.0, accent.alpha(0.50))
+                        }
+                        std::cmp::Ordering::Greater => pip.fill(ink.line.alpha(0.20)),
+                    }
+                })),
+        )
+        .children((completed > 0).then(|| {
+            text(format!("({completed})"))
+                .key("completed-work")
+                .font(LEGEND)
+                .color(ink.muted)
+                .description_static("Focus rounds completed")
+        }))
+}
+
+fn timer_controls(state: &State, status: Status, ink: Ink) -> El {
+    let (verb, action, symbol) = match status {
+        Status::Running => ("Pause", "Pause timer", &PAUSE),
+        Status::Paused => ("Resume", "Resume timer", &PLAY),
+        _ => ("Start", "Start timer", &PLAY),
+    };
+    let muted = state.prefs.volume == 0;
+    let secondary = |key, action, name, symbol| {
+        button(key, action, ink)
+            .size(53.0, 55.0)
+            .gradient(ink.metal(), ink.panel)
+            .border_gradient(1.0, ink.line.alpha(0.58), Color::BLACK.alpha(0.60))
+            .shadow(2.0, 4.0, Color::BLACK.alpha(0.50))
+            .press_scale(0.94)
+            .child(
+                col()
+                    .center()
+                    .gap(2.0)
+                    .a11y_hidden()
+                    .child(glyph(symbol, 19.0, ink.accent))
+                    .child(text(name).font(LEGEND.tracking(0.15)).color(ink.fg)),
+            )
+    };
+    row()
+        .key("timer-footer")
+        .size(FACE_WIDTH, 76.0)
+        .px(10.0)
+        .gap(7.0)
+        .center_y()
+        .radius(10.0)
+        .gradient(ink.well(), ink.bg)
+        .border_gradient(1.0, Color::BLACK.alpha(0.55), ink.line.alpha(0.44))
         .child(
             button("start-pause", action, ink)
-                .size(54.0, 54.0)
-                .radius(27.0)
-                .border(2.0, ink.line)
+                .grow(1.0)
+                .h(55.0)
+                .gradient(
+                    if ink.on_accent() == Color::BLACK {
+                        ink.accent.mix(Color::WHITE, 0.24)
+                    } else {
+                        ink.accent.mix(Color::BLACK, 0.10)
+                    },
+                    ink.accent,
+                )
+                .border_gradient(1.0, Color::WHITE.alpha(0.60), ink.on_accent().alpha(0.48))
+                .shadow(3.0, 0.0, ink.accent.mix(Color::BLACK, 0.60))
+                .shadow(4.0, 10.0, Color::BLACK.alpha(0.46))
+                .hover(Color::WHITE.alpha(0.16))
+                .press_scale(0.96)
                 .help(action)
                 .on_press_tx(|state: &mut State, tx| state.play_timer(TimerAction::Toggle, tx))
-                .child(glyph(symbol, 22.0, ink.fg)),
+                .child(
+                    row()
+                        .center()
+                        .gap(7.0)
+                        .a11y_hidden()
+                        .child(glyph(symbol, 24.0, ink.on_accent()))
+                        .child(
+                            text(verb)
+                                .font(TextStyle::new(18.0, 760.0))
+                                .color(ink.on_accent()),
+                        ),
+                ),
         )
-        .child(el().h(3.0))
-        .child(footer);
-    if state.volume_popup.is_some() {
-        timer.child(
-            col()
-                .key("volume-popover")
-                .w(116.0)
-                .h(62.0)
-                .padding(10.0)
-                .items_center()
-                .pin(None, None, Some(12.0), Some(63.0))
-                .radius(6.0)
-                .fill(ink.panel)
-                .on_hover_change(State::hover_volume)
-                .child(label(
-                    format!("Volume {}%", RangeSetting::Volume.get(state)),
-                    ink.fg,
-                ))
-                .child(slider(state, RangeSetting::Volume, ink.accent, ink, 96.0)),
+        .child(
+            secondary("reset", "Reset timer", "Reset", &RESET)
+                .help("Reset timer")
+                .on_press_tx(|state: &mut State, tx| state.play_timer(TimerAction::Reset, tx)),
         )
-    } else {
-        timer
-    }
+        .child(
+            secondary("skip", "Skip round", "Skip", &SKIP)
+                .help("Skip round")
+                .on_press_tx(|state: &mut State, tx| state.play_timer(TimerAction::Skip, tx)),
+        )
+        .child(
+            secondary(
+                "mute",
+                if muted { "Unmute" } else { "Mute" },
+                "Sound",
+                if muted { &MUTE } else { &SOUND },
+            )
+            .help("Mute or adjust volume")
+            .on_hover_change(State::hover_volume)
+            .on_press_tx(|state: &mut State, tx| {
+                let volume = if state.prefs.volume == 0 {
+                    state.last_volume
+                } else {
+                    0
+                };
+                RangeSetting::Volume.set(state, volume, tx);
+                state.interface_click();
+            }),
+        )
 }
 
 pub fn tab_key(page: Page) -> &'static str {
@@ -406,19 +565,23 @@ fn page_name(page: Page) -> &'static str {
 }
 
 fn drawer(state: &State, page: Page, ink: Ink) -> El {
-    let contents = match page {
-        Page::Timer => timer_settings(state, ink),
-        Page::Options => options(state, ink),
-        Page::Themes => themes(state, ink),
-        Page::About => about(ink),
+    let (title, contents) = match page {
+        Page::Timer => ("Round lengths", timer_settings(state, ink)),
+        Page::Options => ("Behavior and sound", options(state, ink)),
+        Page::Themes => ("Console themes", themes(state, ink)),
+        Page::About => ("About Pomotroid", about(ink)),
     };
     let nav = row()
         .key("settings-tabs")
         .role("group")
         .label("Settings pages")
         .w_full()
-        .h(36.0)
-        .fill(ink.bg)
+        .h(52.0)
+        .gap(5.0)
+        .padding(5.0)
+        .radius(10.0)
+        .fill(ink.well())
+        .border_gradient(1.0, Color::BLACK.alpha(0.55), ink.line.alpha(0.43))
         .children(
             [
                 (Page::Timer, &CLOCK),
@@ -432,19 +595,48 @@ fn drawer(state: &State, page: Page, ink: Ink) -> El {
                     .checked(selected)
                     .grow(1.0)
                     .h_full()
-                    .help(page_name(tab))
-                    .on_press_tx(move |state: &mut State, tx| state.select_page(Some(tab), tx))
-                    .child(glyph(
-                        picture,
-                        20.0,
-                        if selected { ink.fg } else { ink.line },
-                    ))
-                    .children(selected.then(|| {
-                        el().size(30.0, 2.0)
-                            .fill(ink.accent)
-                            .pin(Some(30.0), None, None, Some(0.0))
+                    .gradient(
+                        if selected {
+                            ink.metal().mix(ink.accent, 0.10)
+                        } else {
+                            ink.metal()
+                        },
+                        ink.panel,
+                    )
+                    .border_gradient(
+                        1.0,
+                        if selected {
+                            ink.accent.alpha(0.68)
+                        } else {
+                            ink.line.alpha(0.38)
+                        },
+                        if selected {
+                            ink.accent.alpha(0.40)
+                        } else {
+                            Color::BLACK.alpha(0.48)
+                        },
+                    )
+                    .press_scale(0.96)
+                    .on_press_tx(move |state: &mut State, tx| {
+                        state.interface_click();
+                        state.select_page(Some(tab), tx);
+                    })
+                    .child(
+                        row()
+                            .center()
+                            .gap(5.0)
                             .a11y_hidden()
-                    }))
+                            .child(glyph(
+                                picture,
+                                14.0,
+                                if selected { ink.accent } else { ink.muted },
+                            ))
+                            .child(
+                                text(page_name(tab))
+                                    .font(LEGEND.tracking(0.15))
+                                    .color(ink.fg),
+                            ),
+                    )
             }),
         );
 
@@ -453,30 +645,48 @@ fn drawer(state: &State, page: Page, ink: Ink) -> El {
         .w_full()
         .grow(1.0)
         .min_h(0.0)
-        .child(el().h(18.0))
+        .items_center()
+        .py(20.0)
         .child(
             col()
-                .w_full()
+                .w(FACE_WIDTH)
                 .grow(1.0)
                 .min_h(0.0)
-                .fill(ink.panel)
+                .child(nav)
+                .child(el().h(12.0))
                 .child(
-                    row().w_full().h(34.0).center().child(
-                        label(page_name(page), ink.fg)
-                            .key("page-title")
-                            .role("heading")
-                            .level(2),
-                    ),
-                )
-                .children(state.save_error.as_ref().map(|error| {
-                    row()
+                    col()
                         .w_full()
-                        .px(18.0)
-                        .py(4.0)
-                        .child(label(error.clone(), ink.fg).role("alert").wrap())
-                }))
-                .child(contents)
-                .child(nav),
+                        .grow(1.0)
+                        .min_h(0.0)
+                        .radius(10.0)
+                        .gradient(ink.panel, ink.well())
+                        .border_gradient(1.0, ink.line.alpha(0.58), Color::BLACK.alpha(0.60))
+                        .child(
+                            row()
+                                .w_full()
+                                .h(56.0)
+                                .px(20.0)
+                                .center_y()
+                                .border_sides([0.0, 0.0, 1.0, 0.0], ink.line.alpha(0.30))
+                                .child(
+                                    text(title)
+                                        .font(TextStyle::new(21.0, 720.0))
+                                        .color(ink.fg)
+                                        .key("page-title")
+                                        .role("heading")
+                                        .level(2),
+                                ),
+                        )
+                        .children(state.save_error.as_ref().map(|error| {
+                            row()
+                                .w_full()
+                                .px(20.0)
+                                .py(5.0)
+                                .child(label(error.clone(), ink.fg).role("alert").wrap())
+                        }))
+                        .child(contents),
+                ),
         )
 }
 
@@ -582,17 +792,26 @@ fn slider(state: &State, setting: RangeSetting, accent: Color, ink: Ink, width: 
         .focus_ring(1.5, 1.0, ink.accent)
         .size(width, 24.0)
         .cursor(Cursor::Pointer)
-        .child(el().size(width, 3.0).absolute(0.0, 10.5).fill(ink.bg))
+        .child(
+            el().size(width, 5.0)
+                .absolute(0.0, 9.5)
+                .radius(2.5)
+                .fill(ink.well())
+                .border(1.0, ink.line.alpha(0.28)),
+        )
         .child(
             el().size(position + HANDLE / 2.0, 3.0)
                 .absolute(0.0, 10.5)
+                .radius(1.5)
                 .fill(accent),
         )
         .child(
             el().size(HANDLE, HANDLE)
                 .absolute(position, 4.0)
-                .radius(HANDLE / 2.0)
-                .fill(accent),
+                .radius(4.0)
+                .gradient(accent.mix(Color::WHITE, 0.26), accent)
+                .border_gradient(1.0, Color::WHITE.alpha(0.41), Color::BLACK.alpha(0.41))
+                .shadow(2.0, 4.0, Color::BLACK.alpha(0.65)),
         )
         .on_drag(move |state: &mut State, drag, tx| {
             let fraction = ((drag.x - HANDLE / 2.0) / (drag.w - HANDLE)).clamp(0.0, 1.0);
@@ -623,41 +842,65 @@ fn timer_settings(state: &State, ink: Ink) -> El {
         .key("timer-settings")
         .w_full()
         .grow(1.0)
+        .pt(8.0)
+        .min_h(0.0)
+        .scroll(ScrollSpec {
+            stick_bottom: false,
+        })
         .items_center()
         .children(RangeSetting::TIMER_SETTINGS.map(|setting| {
             let accent = match setting {
                 RangeSetting::Focus => ink.focus,
                 RangeSetting::ShortBreak => ink.short,
                 RangeSetting::LongBreak => ink.long,
-                _ => ink.line,
+                _ => ink.accent,
             };
             col()
-                .h(74.0)
-                .items_center()
+                .w(342.0)
+                .h(64.0)
+                .pt(5.0)
                 .gap(4.0)
-                .child(label(setting.name(), ink.muted))
+                .border_sides([0.0, 0.0, 1.0, 0.0], ink.line.alpha(0.22))
                 .child(
                     row()
-                        .h(20.0)
-                        .px(6.0)
-                        .center()
-                        .radius(4.0)
-                        .fill(ink.bg)
+                        .w_full()
+                        .h(23.0)
+                        .center_y()
+                        .justify_between()
+                        .child(label(setting.name(), ink.fg))
                         .child(
-                            text(setting.display(setting.get(state)))
-                                .font(NUMBER)
-                                .color(ink.fg),
+                            row()
+                                .h(25.0)
+                                .min_w(50.0)
+                                .px(8.0)
+                                .center()
+                                .radius(4.0)
+                                .border(1.0, ink.line.alpha(0.32))
+                                .fill(ink.well())
+                                .child(
+                                    text(setting.display(setting.get(state)))
+                                        .font(NUMBER)
+                                        .color(ink.fg),
+                                ),
                         ),
                 )
-                .child(slider(state, setting, accent, ink, 324.0))
+                .child(slider(state, setting, accent, ink, 342.0))
         }))
+        .child(el().h(13.0))
         .child(
             button("reset-defaults", "Reset timer defaults", ink)
-                .size(130.0, 30.0)
+                .size(145.0, 33.0)
+                .gradient(ink.metal(), ink.panel)
+                .border_gradient(1.0, ink.line.alpha(0.54), Color::BLACK.alpha(0.52))
                 .on_press_tx(|state: &mut State, tx| {
                     state.apply_preferences(PreferenceChange::ResetTimerDefaults, tx);
+                    state.interface_click();
                 })
-                .child(label("Reset Defaults", ink.muted)),
+                .child(
+                    text("Reset defaults")
+                        .font(LEGEND.tracking(0.2))
+                        .color(ink.fg),
+                ),
         )
 }
 
@@ -666,10 +909,11 @@ type Flag = fn(&mut Preferences) -> &mut bool;
 fn toggle(key: &'static str, name: &'static str, enabled: bool, flag: Flag, ink: Ink) -> El {
     row()
         .w_full()
-        .h(34.0)
+        .h(36.0)
         .justify_between()
         .center_y()
         .gap(8.0)
+        .border_sides([0.0, 0.0, 1.0, 0.0], ink.line.alpha(0.18))
         .child(label(name, ink.fg).grow(1.0).wrap())
         .child(
             el().key(key)
@@ -679,26 +923,59 @@ fn toggle(key: &'static str, name: &'static str, enabled: bool, flag: Flag, ink:
                 .focusable(true)
                 .focus_ring(1.5, 2.0, ink.accent)
                 .cursor(Cursor::Pointer)
-                .size(36.0, 20.0)
-                .radius(10.0)
-                .fill(if enabled { ink.accent } else { ink.bg })
+                .size(40.0, 22.0)
+                .radius(6.0)
+                .fill(if enabled {
+                    ink.accent.mix(ink.well(), 0.82)
+                } else {
+                    ink.well()
+                })
+                .border(
+                    1.0,
+                    if enabled {
+                        ink.accent.alpha(0.58)
+                    } else {
+                        ink.line.alpha(0.45)
+                    },
+                )
+                .hover(ink.line.alpha(0.19))
+                .press_scale(0.95)
                 .on_press_tx(move |state: &mut State, tx| {
                     let flag = flag(&mut state.prefs);
                     *flag = !*flag;
                     state.apply_preferences(PreferenceChange::Update, tx);
+                    state.interface_click();
                 })
                 .child(
                     el().size(14.0, 14.0)
-                        .radius(7.0)
-                        .absolute(if enabled { 19.0 } else { 3.0 }, 3.0)
-                        .fill(if enabled { ink.bg } else { ink.line }),
+                        .radius(4.0)
+                        .absolute(4.0, 4.0)
+                        .offset(if enabled { 18.0 } else { 0.0 }, 0.0)
+                        .gradient(
+                            if enabled { ink.accent } else { ink.muted },
+                            if enabled {
+                                ink.accent.mix(ink.well(), 0.22)
+                            } else {
+                                ink.line
+                            },
+                        )
+                        .a11y_hidden(),
                 ),
         )
 }
 
 fn options(state: &State, ink: Ink) -> El {
     let p = &state.prefs;
-    let entries: [(&str, &str, bool, Flag); 9] = [
+    let entries: [(&str, &str, bool, Flag); 11] = [
+        ("visual-motion", "Animation", p.visual_motion, |p| {
+            &mut p.visual_motion
+        }),
+        (
+            "interface-sounds",
+            "Interface sounds",
+            p.interface_sounds,
+            |p| &mut p.interface_sounds,
+        ),
         ("always-on-top", "Always On Top", p.always_on_top, |p| {
             &mut p.always_on_top
         }),
@@ -749,14 +1026,16 @@ fn options(state: &State, ink: Ink) -> El {
         .key("options")
         .w_full()
         .grow(1.0)
+        .min_h(0.0)
+        .clip_rounded(10.0)
         .scroll(ScrollSpec {
             stick_bottom: false,
         })
         .child(
             col()
                 .w_full()
-                .px(18.0)
-                .py(2.0)
+                .px(20.0)
+                .py(6.0)
                 .children(
                     entries
                         .into_iter()
@@ -766,9 +1045,10 @@ fn options(state: &State, ink: Ink) -> El {
                 .child(
                     row()
                         .w_full()
-                        .h(38.0)
+                        .h(44.0)
                         .center_y()
                         .justify_between()
+                        .border_sides([0.0, 0.0, 1.0, 0.0], ink.line.alpha(0.18))
                         .child(label(
                             format!(
                                 "Volume {}",
@@ -779,11 +1059,13 @@ fn options(state: &State, ink: Ink) -> El {
                         .child(slider(state, RangeSetting::Volume, ink.accent, ink, 124.0)),
                 )
                 .child(
-                    row()
-                        .w_full()
-                        .h(36.0)
-                        .center_y()
-                        .child(label("Global Shortcuts", ink.fg).role("heading").level(3)),
+                    row().w_full().h(39.0).pt(8.0).center_y().child(
+                        text("Global shortcuts")
+                            .font(TextStyle::new(16.0, 700.0))
+                            .color(ink.fg)
+                            .role("heading")
+                            .level(3),
+                    ),
                 )
                 .children(ShortcutAction::ALL.map(|action| shortcut_row(state, action, ink))),
         )
@@ -828,6 +1110,7 @@ fn shortcut_row(state: &State, action: ShortcutAction, ink: Ink) -> El {
                         )
                         .on_press_tx(move |state: &mut State, tx| {
                             if !state.shortcuts.pending(action) {
+                                state.interface_click();
                                 state.shortcuts.capture = Some(action);
                                 tx.focus(action.key(), true);
                             }
@@ -847,49 +1130,83 @@ fn shortcut_row(state: &State, action: ShortcutAction, ink: Ink) -> El {
 }
 
 fn themes(state: &State, ink: Ink) -> El {
+    let current = &state.theme().name;
     col()
         .key("theme-picker")
         .w_full()
         .grow(1.0)
+        .min_h(0.0)
+        .clip_rounded(10.0)
         .scroll(ScrollSpec {
             stick_bottom: false,
         })
         .child(
-            col()
+            col().w_full().px(14.0).py(11.0).gap(7.0).children(
+                state
+                    .themes
+                    .iter()
+                    .filter(|theme| theme.name == "Pomotroid")
+                    .chain(
+                        state
+                            .themes
+                            .iter()
+                            .filter(|theme| theme.name != "Pomotroid"),
+                    )
+                    .map(|theme| theme_sample(theme, current, ink)),
+            ),
+        )
+}
+
+fn theme_sample(theme: &Theme, current: &str, ink: Ink) -> El {
+    let preview = Ink::from(theme);
+    let name = theme.name.clone();
+    let selected = current == name;
+    let key = format!("theme-{}", name.to_lowercase().replace(' ', "-"));
+    button(key, &name, ink)
+        .checked(selected)
+        .w_full()
+        .h(45.0)
+        .gradient(preview.metal(), preview.bg)
+        .border_gradient(
+            1.0,
+            if selected {
+                preview.accent
+            } else {
+                preview.line.alpha(0.60)
+            },
+            if selected {
+                preview.accent.alpha(0.55)
+            } else {
+                preview.line.alpha(0.22)
+            },
+        )
+        .on_press_tx(move |state: &mut State, tx| {
+            state.prefs.theme = Some(name.clone());
+            state.apply_preferences(PreferenceChange::Update, tx);
+            state.interface_click();
+        })
+        .child(
+            row()
                 .w_full()
-                .px(18.0)
-                .py(3.0)
+                .h_full()
+                .px(12.0)
                 .gap(10.0)
-                .children(state.themes.iter().map(|theme| {
-                    let preview = Ink::from(theme);
-                    let name = theme.name.clone();
-                    let selected = state.theme().name == name;
-                    let key = format!("theme-{}", name.to_lowercase().replace(' ', "-"));
-                    button(key, &name, ink)
-                        .checked(selected)
-                        .w_full()
-                        .h(46.0)
-                        .fill(preview.bg)
-                        .on_press_tx(move |state: &mut State, tx| {
-                            state.prefs.theme = Some(name.clone());
-                            state.apply_preferences(PreferenceChange::Update, tx);
-                        })
-                        .child(el().size(3.0, 46.0).absolute(0.0, 0.0).fill(preview.accent))
-                        .child(
-                            row()
-                                .h_full()
-                                .absolute(13.0, 0.0)
-                                .center_y()
-                                .child(label(theme.name.clone(), preview.fg)),
-                        )
-                        .children(selected.then(|| {
-                            row()
-                                .size(32.0, 46.0)
-                                .center()
-                                .pin(None, Some(0.0), Some(5.0), None)
-                                .child(glyph(&CHECK, 20.0, preview.accent))
-                        }))
-                })),
+                .center_y()
+                .a11y_hidden()
+                .child(row().w(49.0).gap(3.0).center_y().children(
+                    [preview.focus, preview.short, preview.long].map(|color| {
+                        el().size(13.0, 14.0)
+                            .radius(3.0)
+                            .gradient(color.mix(Color::WHITE, 0.21), color)
+                            .border(1.0, color.mix(Color::BLACK, 0.17))
+                    }),
+                ))
+                .child(label(theme.name.clone(), preview.fg).grow(1.0).truncate())
+                .child(
+                    el().size(19.0, 20.0)
+                        .center()
+                        .children(selected.then(|| glyph(&CHECK, 16.0, preview.accent))),
+                ),
         )
 }
 
@@ -898,30 +1215,33 @@ fn about(ink: Ink) -> El {
     let link = |key, name, url: String| {
         button(key, name, ink)
             .w(220.0)
-            .h(32.0)
+            .h(35.0)
+            .gradient(ink.metal(), ink.panel)
+            .border_gradient(1.0, ink.line.alpha(0.48), Color::BLACK.alpha(0.52))
             .href(url)
-            .child(label(name, ink.muted))
+            .child(label(name, ink.fg))
     };
     col()
         .key("about")
         .w_full()
         .grow(1.0)
         .items_center()
-        .gap(8.0)
+        .gap(10.0)
         .child(el().h(22.0))
         .child(
-            el().size(72.0, 72.0)
-                .radius(36.0)
-                .fill(ink.bg)
+            el().size(80.0, 80.0)
+                .radius(15.0)
+                .gradient(ink.metal(), ink.well())
+                .border_gradient(1.0, ink.line.alpha(0.75), ink.line.alpha(0.32))
                 .center()
-                .child(el().size(52.0, 52.0).radius(26.0).border(8.0, ink.focus)),
+                .child(glyph(&TOMATO, 50.0, ink.focus)),
         )
         .child(
-            text("Pomotroid")
-                .font(TextStyle::new(24.0, 400.0))
-                .color(ink.short),
+            text(format!("Version {version}"))
+                .font(NUMBER)
+                .color(ink.muted),
         )
-        .child(label(format!("Version {version}"), ink.muted))
+        .child(el().h(6.0))
         .child(link(
             "release-notes",
             "Release notes",
