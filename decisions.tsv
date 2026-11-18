@@ -1,0 +1,9 @@
+ts	phase	decision	why	evidence	result
+2026-11-18T21:45:53.7293192+01:00	baseline	Build from the fork's master branch.	The local repository started empty.	origin/master	7cf4c1b
+2026-11-18T21:45:53.7293192+01:00	runtime	Pin Rune and its five desktop dependency patches.	The application uses the same rendering and accessibility implementations as the framework.	Cargo.lock	resolved
+2026-11-18T21:45:53.7293192+01:00	verification	Compare the production timer to an independent cycle model.	Explore arbitrary event sequences inside a stated finite input domain.	verification/README.md	42560 states and 1064000 transitions
+2026-11-18T21:45:53.7293192+01:00	compatibility	Read both historical profile directory spellings and append activity records.	Existing users keep their preferences, themes and activity.	src/preferences.rs	module tests passed
+2026-11-18T21:45:53.7293192+01:00	sources	Keep the historical Electron tree alongside the Rust application.	Automatic approval declined broad deletion of the historical implementation.	src/renderer/App.vue	retained
+2026-11-18T21:51:56.8322769+01:00	ui	Replay timer actions against the compiled Rune executable.	This checks the controls that send commands to the verified reducer.	scripts/verify-rune.py	three rendered flows passed on Windows
+2026-11-18T21:51:56.8322769+01:00	native	Complete a one-minute break while the Windows window is hidden.	A headless script cannot verify that the native event loop keeps waking in the tray.	scripts/verify-windows.ps1	passed with an isolated profile
+2026-11-18T21:54:59.0854047+01:00	packaging	Test the optimized Windows binary and preserve the native icon in platform packages.	The user needs a runnable desktop application.	scripts/verify-windows.ps1	release binary passed tray toggling and hidden expiry
