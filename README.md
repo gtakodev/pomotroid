@@ -1,107 +1,61 @@
-<div align="center">
-  <img alt="Pomotroid" src=".github/images/pomotroid-title.png" width="800px">
-</div>
-<div align="center">
-  <img alt="Pomotroid in action" src=".github/images/pomotroid-screens.png" width="800px">
-</div>
+# Pomotroid
 
-<p align="center">Simple and visually-pleasing Pomodoro timer.</p>
+Pomotroid is a desktop Pomodoro timer written in Rust. The native interface uses [Rune](https://github.com/anomalyco/rune). The default cycle has four 25-minute focus rounds, five-minute short breaks and a 15-minute long break.
 
----
+![The Tomato Reactor, with a floating red tomato above the focus timer](.github/images/pomotroid-rune.png)
 
-- [Overview](#overview)
-- [Features](#features)
-  - [Themes](#themes)
-- [Install](#install)
-  - [Download](#download)
-  - [Homebrew](#homebrew)
-  - [Scoop](#scoop)
-  - [AppGet](#appget)
-- [Roadmap](#roadmap)
-- [Development](#development)
-  - [Build Setup](#build-setup)
-- [License](#license)
+[Watch the avatar gallery and a focus celebration](.github/images/tomato-reactor.webp).
 
-## Overview
+## Run the timer
 
-Pomotroid is a simple and configurable Pomodoro timer. It aims to provide a visually-pleasing and reliable way to track productivity using the Pomodoro Technique.
-
-Pomotroid is in its early stages, so feedback and contributions are welcome and appreciated! :seedling:
-
-## Features
-
-- Customize times and number of rounds (persistent)
-- Charming timer alert sounds (optional)
-- Desktop notifications (optional)
-- Minimize to tray (optional)
-- Several themes included with the ability to create custom themes.
-- Timer activity logging.
-
-### Themes
-
-Pomotroid provides many themes. It's also theme-able, allowing you to customize its appearance.
-
-![Screenshots of Pomotroid using various themes](./.github/images/pomotroid_themes-preview--914x219.png)
-
-Visit the [theme documentation](./docs/themes/themes.md) to view the full list of official themes and for instruction on creating your own.
-
-## Install
-
-### Download
-
-Download the latest version from the [releases](https://github.com/Splode/pomotroid/releases) page.
-
-Pomotroid is available for Windows, Mac OSX and Linux.
-
-### Homebrew
-
-You can also install Pomotroid on macOS with [Homebrew](https://brew.sh):
+Install Rust with rustup. On Windows, install the Visual Studio C++ build tools and the Windows SDK. On Linux, install the [build and desktop runtime packages](CONTRIBUTING.md#build-and-run-pomotroid), including `libxkbcommon-x11-0` on Ubuntu for a windowed run.
 
 ```sh
-brew install --cask pomotroid
+cargo run --locked --release
 ```
 
-### Scoop
+Press **Space** to start or pause. **Reset** restarts the current round. **Skip** advances to the next phase and credits the current focus round.
 
-You can install Pomotroid on Windows with [scoop](https://scoop.sh/)
+Select **Change avatar** in the chamber to pick Tomato, Luma the lunar moth, or Clack the radio crab. Your choice carries across restarts, and you can switch in the middle of a session. Click a character to see its reaction.
+
+When a focus round reaches zero, your character celebrates for five seconds with confetti and a short fanfare. Your break starts according to its usual setting. Reduced motion shows a still celebration, and turning off interface sounds restores the original round alert.
+
+Open the gear to change durations, rounds, automatic starts, themes and global shortcuts. Under **Options**, switch **Animation** and **Interface sounds** on or off independently. The reactor also follows the system’s reduced-motion setting. Use the speaker control to mute or adjust the volume.
+
+The release executable embeds the original sounds, fonts and 17 themes. On macOS use the application bundle for desktop notifications. On Linux, notifications use `notify-send` and hiding to the tray requires a desktop panel with a StatusNotifier host.
+
+## Keep your settings
+
+The native app reads the Electron profile's `user-preferences.json`, user themes and daily activity log directory. It saves settings when you change them. Set `POMOTROID_HOME` to a separate directory to try the port with an isolated profile. See the [theme format and profile locations](docs/themes/themes.md).
+
+Local integrations can connect to `ws://127.0.0.1:1314`. A browser integration must serve its page from a loopback HTTP or HTTPS origin. Send `{"event":"getState"}` to read the current state. The app broadcasts `roundChange` with the same `data.state` field. States are `idle`, `work`, `short-break`, `long-break` and `paused`. If another instance owns the port, the timer still runs.
+
+## Verify the port
+
+Run the application tests and the independent timer specification.
 
 ```sh
-scoop install https://raw.githubusercontent.com/Splode/pomotroid/master/pomotroid.json
+cargo test --locked
+cargo test --locked --offline --manifest-path verification/Cargo.toml -- --nocapture
 ```
 
-### AppGet
+The checker compares the production timer to a specification across all reachable states within its input bounds. A mismatch prints the shortest sequence of actions that reproduces it. The [verification notes](verification/README.md) explain the bounds and show a counterexample.
 
-You can install Pomotroid on Windows with [AppGet](https://appget.net/)
+Render a timer screen or inspect its accessible controls with Rune's headless driver.
 
 ```sh
-appget install pomotroid
+cargo run --locked -- --snap timer.png
+cargo run --locked -- --tree timer.json
 ```
 
-## Roadmap
+Run `python scripts/verify-rune.py target/release/pomotroid` to replay the timer controls in the built app. On Windows, pass `target/release/pomotroid.exe`. For a native Windows tray check, run the following on an interactive desktop. It starts a separate profile and waits for a one-minute break to finish with the window hidden.
 
-:memo: Future plans for enhancements and development:
-
-- Mini-mode
-
-## Development
-
-Pomotroid is built with [Vue.js](https://github.com/vuejs/vue), [Electron](https://github.com/electron/electron), and [electron-vue](https://github.com/SimulatedGREG/electron-vue).
-
-_Note: depending on your OS settings, you may receive a security warning upon installation. This has to do with Pomotroid being an unsigned application. You can find out more by researching code-signing for Apple and Microsoft._
-
-### Build Setup
-
-```bash
-# install dependencies
-npm i
-
-# serve with hot reload at localhost:9080
-npm run dev
-
-# build Pomotroid for production
-npm run build
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File .\scripts\verify-windows.ps1 -Executable .\target\release\pomotroid.exe
 ```
+
+The native application starts at [src/main.rs](src/main.rs).
 
 ## License
 
-MIT &copy; [Christopher Murphy](https://github.com/Splode)
+MIT. Original Pomotroid design and assets by Christopher Murphy and contributors. See [LICENSE](LICENSE).

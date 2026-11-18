@@ -1,20 +1,95 @@
-name: Build/release
+name: Build and test
 
-on: push
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-  release:
-    runs-on: ${{ matrix.os }}
+  verify-timer:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install
+      - run: cargo test --locked --offline --manifest-path verification/Cargo.toml -- --nocapture
 
+  build:
+    name: ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-latest, windows-latest]
+        include:
+          - os: ubuntu-24.04
+            platform: Linux x64
+            artifact: pomotroid-linux-x64.tar.gz
+          - os: windows-2025
+            platform: Windows x64
+            artifact: pomotroid-windows-x64.exe
+          - os: macos-15-intel
+            platform: macOS Apple silicon
+            artifact: pomotroid-macos-arm64.zip
+            target: aarch64-apple-darwin
+          - os: macos-15-intel
+            platform: macOS Intel
+            artifact: pomotroid-macos-x64.zip
 
     steps:
-      - name: Check out Git repository
-        uses: actions/checkout@v1
-
-      - name: Install Node.js, NPM and Yarn
-        uses: actions/setup-node@v1
+      - uses: actions/checkout@v7
         with:
-          node-version: 14
+          persist-credentials: false
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libasound2-dev libwayland-dev libxkbcommon-dev
+      - run: rustup toolchain install
+      - if: matrix.target == ''
+        run: cargo test --locked --release --bins
+      - if: matrix.target == ''
+        run: cargo build --locked --release
+      - name: Cross-compile for Apple silicon with the macOS SDK
+        if: matrix.target != ''
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          rustup target add "$TARGET"
+          cargo build --locked --release --target "$TARGET"
+          lipo -verify_arch arm64 "target/$TARGET/release/pomotroid"
+      - name: Exercise the timer through Rune
+        if: runner.os == 'Windows'
+        run: python scripts/verify-rune.py target/release/pomotroid.exe
+      - name: Package Linux binary
+        if: runner.os == 'Linux'
+        env:
+          ARTIFACT: ${{ matrix.artifact }}
+        run: |
+          install -Dm755 target/release/pomotroid target/linux/bin/pomotroid
+          install -Dm644 packaging/com.splode.pomotroid.desktop target/linux/share/applications/com.splode.pomotroid.desktop
+          install -Dm644 static/icon.png target/linux/share/icons/hicolor/512x512/apps/com.splode.pomotroid.png
+          tar -czf "$ARTIFACT" -C target/linux bin share
+      - name: Package Windows executable
+        if: runner.os == 'Windows'
+        env:
+          ARTIFACT: ${{ matrix.artifact }}
+        run: Copy-Item target/release/pomotroid.exe $env:ARTIFACT
+      - name: Package macOS app
+        if: runner.os == 'macOS'
+        env:
+          ARTIFACT: ${{ matrix.artifact }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          directory="target/${TARGET:+$TARGET/}release"
+          bash scripts/bundle-macos.sh "$directory/pomotroid"
+          ditto -c -k --keepParent "$directory/Pomotroid.app" "$ARTIFACT"
+      - uses: actions/upload-artifact@v7
+        with:
+          path: ${{ matrix.artifact }}
+          archive: false
+          if-no-files-found: error

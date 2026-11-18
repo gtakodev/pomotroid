@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="152" height="103" viewBox="-76 -19 152 103">
+  <defs>
+    <linearGradient id="silk" x1="0" y1="0" x2=".78" y2=".98">
+      <stop stop-color="#1f394f"/><stop offset=".24" stop-color="#497f98"/><stop offset=".42" stop-color="#9adbe5"/>
+      <stop offset=".62" stop-color="#c3ebe4"/><stop offset=".8" stop-color="#8ec7d9"/><stop offset=".93" stop-color="#8c8cad"/><stop offset="1" stop-color="#f6dfab"/>
+    </linearGradient>
+    <linearGradient id="rim" x2=".1" y2="1">
+      <stop stop-color="#9adbe5"/><stop offset=".5" stop-color="#99adc5"/><stop offset="1" stop-color="#fff0b9"/>
+    </linearGradient>
+    <path id="outline" d="M3-8C25-14 53-21 72-13C74-1 68 11 61 19Q63 25 55 29Q54 35 48 36C39 43 39 55 38 62C37 72 43 76 34 82C35 73 29 72 29 66C29 58 32 53 32 45Q22 48 18 42Q16 43 14 45C3 32 3 12 3-8Z"/>
+    <clipPath id="wingClip"><use xlink:href="#outline"/></clipPath>
+    <g id="wing">
+      <use xlink:href="#outline" fill="url(#silk)" stroke="url(#rim)" stroke-width="1.35" stroke-linejoin="round"/>
+      <g clip-path="url(#wingClip)">
+        <path d="M6 1C22 15 32 15 51 15Q60 12 68 3C57 21 38 28 18 13Z" fill="#edecda" opacity=".66"/>
+        <path d="M9 11Q22 35 38 34Q48 34 60 20Q53 38 39 42Q37 59 35 64Q34 72 36 77Q30 66 32 58Q34 49 32 44Q13 48 8 25Z" fill="#657f9a" opacity=".87"/>
+        <path d="M8 14C18 31 26 35 35 37Q44 37 52 29M35 42C39 50 30 63 36 70" fill="none" stroke="#e5c697" stroke-width="1.35"/>
+        <g fill="none" stroke="#475f83" stroke-linecap="round">
+          <path d="M7 2Q29 12 53 8Q65 5 74-4M8 4Q30 18 44 21Q59 23 65 15M9 6C20 21 35 32 50 33M8 9Q17 35 31 41Q36 44 35 51" stroke-width=".82" opacity=".85"/>
+          <path d="M19 12Q38 15 50 11M25 18Q34 24 47 25M23 27L34 33" stroke-width=".52" opacity=".6"/>
+        </g>
+      </g>
+      <g transform="translate(45 12) rotate(12)">
+        <ellipse rx="7.9" ry="6.5" fill="#80a5a8" stroke="#cddbce" stroke-width=".7"/>
+        <ellipse rx="6.6" ry="5.1" fill="#3d6074" stroke="#ddc286" stroke-width=".75"/>
+        <path d="M1.9-4.1C-4.6-4.8-6.9 2-1.5 3.8Q1.3 4.9 3.8 2.2C-1 3.1-3.5-1.5 1.9-4.1Z" fill="#f8df99"/>
+        <circle cx="2.3" cy="-.5" r=".69" fill="#ffedb2"/>
+      </g>
+      <g fill="#f9e3bc"><ellipse cx="54" cy="23" rx="1.65" ry=".8" transform="rotate(-20 54 23)"/><circle cx="49.6" cy="25.4" r=".8"/><circle cx="32" cy="27" r=".75"/><circle cx="35" cy="27.6" r=".5"/></g>
+      <path d="M37 53Q33 67 36 73" fill="none" stroke="#f1f1d2" stroke-width=".78"/>
+    </g>
+  </defs>
+  <use xlink:href="#wing" transform="scale(-1 1)"/><use xlink:href="#wing"/>
+</svg>

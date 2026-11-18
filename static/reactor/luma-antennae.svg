@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="86" height="41" viewBox="-43 -68 86 41">
+  <defs>
+    <linearGradient id="feather" x1="0" y1="1" x2=".84" y2="0">
+      <stop stop-color="#546b84"/><stop offset=".48" stop-color="#9ca9b9"/><stop offset=".8" stop-color="#f2d7a5"/><stop offset="1" stop-color="#ffebbd"/>
+    </linearGradient>
+    <g id="comb" fill="none" stroke="url(#feather)" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M7-28Q14-52 38-63" stroke="#263545" stroke-width="2.8"/>
+      <path d="M7-28Q14-52 38-63" stroke-width="1.5"/>
+      <path d="M12-40Q11-45 14-49M15-44Q14-51 18-54M18-48Q17-54 21-58M21-51Q21-58 25-61M25-54Q25-60 29-63M29-57Q29-62 33-65M33-60Q34-63 36-64M15-44Q18-44 22-48M18-48Q23-47 28-52M22-52Q27-50 31-55M26-55Q33-54 36-59M30-58Q36-57 39-61" stroke-width="1.1"/>
+      <path d="M17-48Q22-56 29-59" stroke="#fff0c7" stroke-width=".65"/>
+      <ellipse cx="38.4" cy="-63.6" rx="1.4" ry=".8" transform="rotate(-33 38.4 -63.6)" fill="#ffefc9" stroke="none"/>
+    </g>
+  </defs>
+  <use xlink:href="#comb" transform="scale(-1 1)"/><use xlink:href="#comb"/>
+</svg>
