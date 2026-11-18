@@ -179,6 +179,7 @@ impl Timer {
     pub fn configure(&mut self, config: TimerConfig) -> Option<TimerEvent> {
         let previous = self.config.duration(self.phase);
         self.config = config;
+        self.round = self.round.min(config.rounds);
         if self.config.duration(self.phase) != previous {
             return self.reset();
         }
@@ -218,11 +219,11 @@ impl Timer {
                     Phase::ShortBreak
                 }
             }
-            Phase::ShortBreak => {
+            Phase::ShortBreak if self.round < self.config.rounds => {
                 self.round += 1;
                 Phase::Work
             }
-            Phase::LongBreak => {
+            Phase::ShortBreak | Phase::LongBreak => {
                 self.round = 1;
                 Phase::Work
             }

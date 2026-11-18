@@ -134,6 +134,7 @@ impl Spec {
         };
         timer.phase() == self.phase()
             && timer.status() == status
+            && (1..=self.settings.rounds).contains(&timer.round())
             && timer.round() == self.position / 2 + 1
             && timer.total_seconds() == self.length() / 2
             && timer.remaining_seconds() == self.displayed()
@@ -168,6 +169,8 @@ impl Spec {
             Input::Configure(new) => {
                 let length = self.length();
                 self.settings = new;
+                let last_position_of_same_kind = 2 * (new.rounds - 1) + self.position % 2;
+                self.position = self.position.min(last_position_of_same_kind);
                 if self.length() != length {
                     return self.step(Input::Reset);
                 }
@@ -191,7 +194,7 @@ impl Spec {
                 self.position = if self.final_break {
                     0
                 } else {
-                    self.position + 1
+                    (self.position + 1) % (2 * self.settings.rounds)
                 };
                 self.final_break =
                     self.position % 2 == 1 && self.position >= 2 * self.settings.rounds - 1;
@@ -389,6 +392,48 @@ fn every_supported_target_gets_its_full_cycle() {
             assert_eq!((timer.phase(), timer.round()), (Phase::Work, 1));
         }
     }
+}
+
+#[test]
+fn editing_rounds_preserves_the_clock_and_finishes_the_selected_break() {
+    let config = |rounds| TimerConfig::from_minutes(1, 2, 3, rounds, false, false);
+    let mut timer = Timer::new(config(5));
+    for _ in 0..6 {
+        timer.skip();
+    }
+    assert_eq!((timer.phase(), timer.round()), (Phase::Work, 4));
+    timer.skip();
+    timer.toggle();
+    timer.advance(Duration::from_millis(12_345));
+    assert_eq!(timer.configure(config(3)), None);
+    assert_eq!((timer.phase(), timer.round()), (Phase::ShortBreak, 3));
+    assert_eq!(timer.total_seconds(), 120);
+    let remaining = Duration::from_millis(107_655);
+    assert_eq!(
+        production::clock_values(&timer),
+        (remaining, Duration::ZERO)
+    );
+    assert_eq!(
+        timer.advance(remaining),
+        Some(TimerEvent::Completed {
+            phase: Phase::ShortBreak,
+            next: Phase::Work,
+        })
+    );
+    assert_eq!((timer.round(), timer.completed_work()), (1, 4));
+    for _ in 0..5 {
+        timer.skip();
+    }
+    assert_eq!((timer.phase(), timer.round()), (Phase::LongBreak, 3));
+    timer.toggle();
+    timer.advance(Duration::from_secs(20));
+    assert_eq!(timer.configure(config(12)), None);
+    assert_eq!(
+        (timer.phase(), timer.remaining_seconds()),
+        (Phase::LongBreak, 160)
+    );
+    timer.skip();
+    assert_eq!((timer.phase(), timer.round()), (Phase::Work, 1));
 }
 
 #[test]
