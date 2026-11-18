@@ -46,7 +46,7 @@ Run `python scripts/verify-rune.py target/release/pomotroid` to replay the timer
 powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File .\scripts\verify-windows.ps1 -Executable .\target\release\pomotroid.exe
 ```
 
-The original Vue and Electron sources remain in this checkout for comparison. The native build starts at [src/main.rs](src/main.rs). Cargo builds and runs it independently of Node.js.
+The native application starts at [src/main.rs](src/main.rs).
 
 ## License
 

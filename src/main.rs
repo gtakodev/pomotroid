@@ -24,8 +24,8 @@ use ui_shortcuts::Shortcuts;
 const SIZE: (f32, f32) = (360.0, 478.0);
 const TITLEBAR_HEIGHT: f32 = 50.0;
 const FONTS: &[&[u8]] = &[
-    include_bytes!("renderer/assets/fonts/Lato-Regular.ttf"),
-    include_bytes!("renderer/assets/fonts/RobotoMono-Light.ttf"),
+    include_bytes!("../static/fonts/Lato-Regular.ttf"),
+    include_bytes!("../static/fonts/RobotoMono-Light.ttf"),
 ];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
